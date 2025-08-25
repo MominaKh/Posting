@@ -1,0 +1,40 @@
+@import "tailwindcss";
+:root {
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+
+  --rich-black: #0C0C16;
+  --rich-black-light: #161625;
+  --navbar-bg: #11101E;
+  --periwinkle: #B0BAFF;
+  --periwinkle-light: rgba(176, 186, 255, 0.2);
+  --columbia-blue: #C9E8FF;
+  --celadon: #B9F0D7;
+  --medium-slate-blue: #6866FF;
+  --medium-slate-blue-dark: #5755D6;
+  --periwinkle-dark: #9a98e0;
+  --celadon-dark: #a0d8c0;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --navbar-border: rgba(176, 186, 255, 0.1);
+  --pinkish: #D9467C;
+  --pinkish-dark: #C0396B;
+  --card-button-bg: #2A2A3E;
+  --card-button-hover-bg: #383850;
+
+}
+
+.bg-navbar-bg { background-color: var(--navbar-bg); }
+.border-navbar-border { border-color: var(--navbar-border);}
+.bg-rich-black-light { background-color: var(--rich-black-light);}
+.text-columbia-blue { color: var(--columbia-blue);}
+.text-pinkish { color: var(--pinkish);}
+.bg-medium-slate-blue { background-color: var(--medium-slate-blue);}
+.hover\:bg-white\/10:hover { background-color: rgba(255,255,255,0.10);}
+.hover\:border-periwinkle:hover { border-color: var(--periwinkle);}
+.font-fenix { font-family: 'Fenix', serif; }
+
+
