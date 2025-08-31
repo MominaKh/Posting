@@ -5,7 +5,6 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-
   --rich-black: #0C0C16;
   --rich-black-light: #161625;
   --navbar-bg: #11101E;
@@ -24,8 +23,29 @@
   --pinkish-dark: #C0396B;
   --card-button-bg: #2A2A3E;
   --card-button-hover-bg: #383850;
-
 }
+
+/* Custom radial gradient utility for background */
+.bg-gradient-radial-custom {
+  background: radial-gradient(110% 90% at 0% 0%, #22213b 60%, #18162D 100%);
+}
+
+
+.bg-rich-black {
+  background: #0C0C16;
+}
+.font-fenix {
+  font-family: 'Fenix', serif;
+}
+.border-periwinkle-light{
+  color: var(--periwinkle-light); 
+}
+/* index.css additions */
+.text-periwinkle { color: var(--periwinkle); }   
+.text-celadon-dark { color: var(--celadon-dark); }            /* you were using this class but it wasn't defined */
+.bg-chip { background-color: #374053; }                   /* matches the pill bg */
+.icon-periwinkle { color: #B0BAFF !important; }           /* force Material Icons color */
+.text-desc { color: #FFFFFFB2; }                          /* description color */
 
 .bg-navbar-bg { background-color: var(--navbar-bg); }
 .border-navbar-border { border-color: var(--navbar-border);}
@@ -36,5 +56,3 @@
 .hover\:bg-white\/10:hover { background-color: rgba(255,255,255,0.10);}
 .hover\:border-periwinkle:hover { border-color: var(--periwinkle);}
 .font-fenix { font-family: 'Fenix', serif; }
-
-

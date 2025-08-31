@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import Logo from "../assets/BytehiveLogo.png";
-
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -11,15 +10,18 @@ export default function Navbar() {
           {/* LOGO + TITLE */}
           <div className="flex items-center space-x-1">
             <img src={Logo} alt="ByteHive Logo" className="w-14 h-14 object-contain" />
-            <h1 className="font-fenix text-3xl tracking-wide text-white">
-              Bytehive
-            </h1>
+            <a href="/" >
+              <h1 className="font-fenix text-3xl tracking-wide text-white">
+                Bytehive
+              </h1>
+            </a>
+            
           </div>
 
           {/* DESKTOP NAV */}
           <div className="hidden md:flex items-center space-x-8">
             <nav className="flex items-center space-x-3 text-xl">
-              <a className="flex flex-col items-center text-columbia-blue hover:text-white transition-colors group" href="#">
+              <a className="flex flex-col items-center text-columbia-blue hover:text-white transition-colors group" href="/events">
                 <div className="p-3 rounded-md bg-rich-black-light group-hover:bg-periwinkle-light transition-colors flex items-center justify-center">
                   <span className="material-icons text-4xl">grid_view</span>
                 </div>
