@@ -1,6 +1,8 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 
 const BlogCard = ({
+  id,
   image,
   community,
   date,
@@ -21,22 +23,26 @@ const BlogCard = ({
   const [isDownvoted, setIsDownvoted] = useState(false);
 
   // Handlers
-  const toggleBookmark = () => setIsBookmarked(!isBookmarked);
-  const toggleUpvote = () => {
+  const toggleBookmark = (e) => {
+    e.preventDefault(); // prevent navigation
+    setIsBookmarked(!isBookmarked);
+  };
+  const toggleUpvote = (e) => {
+    e.preventDefault();
     setIsUpvoted(!isUpvoted);
     if (isDownvoted) setIsDownvoted(false); // can't be both
   };
-  const toggleDownvote = () => {
+  const toggleDownvote = (e) => {
+    e.preventDefault();
     setIsDownvoted(!isDownvoted);
     if (isUpvoted) setIsUpvoted(false);
   };
 
   return (
-    <div
-      className="bg-navbar-bg rounded-xl overflow-hidden border z-0"
-      style={{
-        border: "1px solid var(--navbar-border)",
-      }}
+    <Link
+      to={`/post/${id}`}
+      className="block bg-navbar-bg rounded-xl overflow-hidden border z-0 hover:bg-white/5 transition"
+      style={{ border: "1px solid var(--navbar-border)" }}
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 relative">
         {/* Blog Image */}
@@ -141,9 +147,7 @@ const BlogCard = ({
 
               {/* Views */}
               <span className="flex items-center text-sm hover:text-white transition-colors">
-                <span className="material-icons text-base mr-1">
-                  visibility
-                </span>
+                <span className="material-icons text-base mr-1">visibility</span>
                 {views}
               </span>
             </div>
@@ -153,7 +157,9 @@ const BlogCard = ({
           <button
             onClick={toggleBookmark}
             className={`absolute top-4 right-4 p-2 rounded-full transition-colors ${
-              isBookmarked ? "text-periwinkle" : "text-periwinkle hover:text-white"
+              isBookmarked
+                ? "text-periwinkle"
+                : "text-periwinkle hover:text-white"
             }`}
           >
             <span className="material-icons">
@@ -162,7 +168,7 @@ const BlogCard = ({
           </button>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };
 

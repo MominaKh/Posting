@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import SearchBar from "../shared/SearchBar";
 import NewPostButton from "../shared/NewPostButton";
 import Navbar from "../shared/Navbar";
@@ -7,119 +7,102 @@ import BlogFilterBar from "../components/BlogListing/BlogFilterBar";
 import PopularTags from "../components/BlogListing/PopularTags";
 import PopularCommunities from "../components/BlogListing/PopularCommunties";
 import UpcomingEvents from "../components/BlogListing/UpcomingEvents";
-
-// Dummy Blogs
-const DUMMY_BLOGS = [
-  {
-    image:
-      "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=600&q=80",
-    community: "Next.js Devs",
-    date: "Mar 10, 2025",
-    readTime: "6 min",
-    title:
-      "Building Modern Web Applications with Next.js and the TypeScript",
-    description:
-      "Learn how to leverage the power of Next.js and TypeScript to create robust, type-safe web applications with excellent developer experience.",
-    tags: ["Next.js", "Typescript", "WebDevelopment"],
-    author: {
-      name: "Alex Johnson",
-      avatar:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuCGFljVK_1YLiLqNE8SMU0zsD2LUOv_ZJClfdq_DWp5FLd8KsDvQMnl0VOe2aFfU8eqc6M6I9aJ-VCGtFzHlUS0P9bjYnTWHMI5UO-pnf_7H4DGlvVnCe8Bj212iSAhJEonp7QjXn4VZAVbIpKHMYo4M70ouLkfY0wZPHju90a2vQzdL6Es79mMQ8NwXMHcJmqQaWhUuBwfkisr2uii-p0d3iFFfq4_RPcfykChX-MAS__NVdhAo3TLJvD4_LSMPxI_TLnrD1Gi_oFK",
-    },
-    upvotes: 142,
-    downvotes: 12,
-    comments: 24,
-    views: 1850,
-    bookmarked: false,
-  },
-  {
-    image:
-      "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=600&q=80",
-    community: "Next.js Devs",
-    date: "Mar 10, 2025",
-    readTime: "6 min",
-    title:
-      "Building Modern Web Applications with Next.js and the TypeScript",
-    description:
-      "Learn how to leverage the power of Next.js and TypeScript to create robust, type-safe web applications with excellent developer experience.",
-    tags: ["Next.js", "Typescript", "WebDevelopment"],
-    author: {
-      name: "Alex Johnson",
-      avatar:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuC0SOH_qdug48AdwWxvlB89VAMgWwLvCzU5nSDeh7sGBOxfcwtoGxXGFu3Q2JauQZWpKqk-GCgCttE6cJIsPEkbYBWNgz8qS6HIT-5Sz6LgHkDAzWnkSvAOUOk7CDaVV0qGaLh5TF5SZPN1EfhhvDKzelBH3komHVKuAU_sLPUdP82-LnV5uJEpBfaz0d1ZudZEkDGu7GEHq46ftKnljIDa0wEpEPuusxbFSIsOPoONgMi3EDnu1Bupe8IbBw6vKFxxdMaP6_2s5fii",
-    },
-    upvotes: 142,
-    downvotes: 8,
-    comments: 24,
-    views: 1850,
-    bookmarked: false,
-  },
-  {
-    image:
-      "https://images.unsplash.com/photo-1465101162946-4377e57745c3?auto=format&fit=crop&w=600&q=80",
-    community: "Next.js Devs",
-    date: "Mar 10, 2025",
-    readTime: "6 min",
-    title:
-      "Building Modern Web Applications with Next.js and the TypeScript",
-    description:
-      "Learn how to leverage the power of Next.js and TypeScript to create robust, type-safe web applications with excellent developer experience.",
-    tags: ["Next.js", "Typescript", "WebDevelopment"],
-    author: {
-      name: "Alex Johnson",
-      avatar:
-        "https://lh3.googleusercontent.com/aida-public/AB6AXuC0SOH_qdug48AdwWxvlB89VAMgWwLvCzU5nSDeh7sGBOxfcwtoGxXGFu3Q2JauQZWpKqk-GCgCttE6cJIsPEkbYBWNgz8qS6HIT-5Sz6LgHkDAzWnkSvAOUOk7CDaVV0qGaLh5TF5SZPN1EfhhvDKzelBH3komHVKuAU_sLPUdP82-LnV5uJEpBfaz0d1ZudZEkDGu7GEHq46ftKnljIDa0wEpEPuusxbFSIsOPoONgMi3EDnu1Bupe8IbBw6vKFxxdMaP6_2s5fii",
-    },
-    upvotes: 142,
-    downvotes: 16,
-    comments: 24,
-    views: 1850,
-    bookmarked: false,
-  },
-];
+import axios from "axios";
 
 // Filters
 const FILTERS = ["All", "Popular", "Newest"];
 
+const DEFAULT_IMAGE =
+  "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=600&q=80";
+
 const BlogListing = () => {
   const [selectedFilter, setSelectedFilter] = useState(FILTERS[0]);
+  const [blogs, setBlogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    // Fetch blogs from API
+    const fetchBlogs = async () => {
+      setLoading(true);
+      setErr("");
+      try {
+        const res = await axios.get("http://localhost:5000/api/posts");
+        setBlogs(
+  Array.isArray(res.data.posts)
+    ? res.data.posts.map((post) => ({
+        id: post._id,   // ✅ here
+        image: post.thumbnail || DEFAULT_IMAGE,
+        community: post.community || "",
+        date: post.createdAt
+          ? new Date(post.createdAt).toLocaleDateString()
+          : "",
+        readTime: post.read_time || "6 min",   // ✅ use correct field from DB
+        title: post.post_title || "",
+        description: post.small_description || "",
+        tags: post.tags || [],
+        author: post.author || {
+          name: "Unknown",
+          avatar:
+            "https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff",
+        },
+        upvotes: post.upvotes || 0,
+        downvotes: post.downvotes || 0,
+        comments: post.comments || 0,
+        views: post.views || 0,
+        bookmarked: false,
+      }))
+    : []
+);
+
+      } catch (err) {
+        setBlogs([]);
+        setErr(
+          err?.response?.data?.error ||
+          err?.message ||
+          "Failed to fetch blogs. Please try again."
+        );
+      }
+      setLoading(false);
+    };
+    fetchBlogs();
+  }, []);
 
   return (
     <div className="min-h-screen bg-rich-black flex flex-col relative">
       <Navbar />
 
-  <div
-    className="absolute z-0"
-    style={{
-      width: 637,
-      height: 300,
-      top: -38,
-      left: "50%",
-      transform: "translateX(-50%)",
-      background: "#1A1842B3",
-      filter: "blur(100px)",
-      boxShadow: "0px 4px 100px 500px #00000066",
-      borderRadius: 30,
-      pointerEvents: "none",
-    }}
-  />
+      <div
+        className="absolute z-0"
+        style={{
+          width: 637,
+          height: 300,
+          top: -38,
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "#1A1842B3",
+          filter: "blur(100px)",
+          boxShadow: "0px 4px 100px 500px #00000066",
+          borderRadius: 30,
+          pointerEvents: "none",
+        }}
+      />
       {/* Header */}
-<div className="w-full flex justify-center pt-8 pb-6 px-4 sm:px-6 lg:px-8 relative z-10">
-  {/* Blurred Background Glow */}
-  <div className="w-full max-w-7xl z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-    {/* Row 1: Title */}
-    <h2 className="font-fenix text-[28px] text-white font-normal text-center md:text-left">
-      Your Feed
-    </h2>
+      <div className="w-full flex justify-center pt-8 pb-6 px-4 sm:px-6 lg:px-8 relative z-10">
+        {/* Blurred Background Glow */}
+        <div className="w-full max-w-7xl z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          {/* Row 1: Title */}
+          <h2 className="font-fenix text-[28px] text-white font-normal text-center md:text-left">
+            Your Feed
+          </h2>
 
-    {/* Row 2: Search + Post */}
-    <div className="flex justify-center items-center gap-2 w-full md:flex-1 md:justify-center md:px-12">
-      <SearchBar className="flex-1 max-w-xs sm:max-w-md" />
-      <NewPostButton />
-    </div>
-  </div>
-</div>
-
+          {/* Row 2: Search + Post */}
+          <div className="flex justify-center items-center gap-2 w-full md:flex-1 md:justify-center md:px-12">
+            <SearchBar className="flex-1 max-w-xs sm:max-w-md" />
+            <NewPostButton />
+          </div>
+        </div>
+      </div>
 
       {/* Content */}
       <div className="w-full flex justify-center px-4 lg:px-8">
@@ -129,15 +112,21 @@ const BlogListing = () => {
             {/* Filter */}
             <div className="mb-6">
               <BlogFilterBar
-              filters={FILTERS}          // ✅ pass filters array
-              selected={selectedFilter}
-              onSelect={setSelectedFilter}
-            />
+                filters={FILTERS}
+                selected={selectedFilter}
+                onSelect={setSelectedFilter}
+              />
             </div>
             <div className="flex flex-col gap-7 pb-12">
-              {DUMMY_BLOGS.map((blog, i) => (
-                <BlogCard key={i} {...blog} />
-              ))}
+              {loading ? (
+                <div className="text-white text-center py-8">Loading blogs...</div>
+              ) : err ? (
+                <div className="text-red-400 text-center py-8">{err}</div>
+              ) : blogs.length === 0 ? (
+                <div className="text-white text-center py-8">No blogs found.</div>
+              ) : (
+                blogs.map((blog) => <BlogCard key={blog.id} {...blog} />)
+              )}
             </div>
           </div>
 
