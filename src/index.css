@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "react-quill/dist/quill.snow.css";
+
 :root {
   font-synthesis: none;
   text-rendering: optimizeLegibility;

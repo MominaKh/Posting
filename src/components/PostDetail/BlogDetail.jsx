@@ -1,11 +1,14 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/auth";
 import axios from "axios";
 import TextSelectionPopup from "./TextSelectionPopup";
-import Comments from "./Comments";
+import Comment from "./Comment/Comment";
 
 export default function BlogDetail() {
   const { postId } = useParams();
+  const navigate = useNavigate();
+  const { auth } = useAuth();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -55,6 +58,11 @@ export default function BlogDetail() {
   };
 
   const toggleUpvote = () => {
+    if (!auth?.token) {
+      navigate('/login', { state: { from: `/post/${postId}` } });
+      return;
+    }
+    
     if (isUpvoted) {
       setUpvotes(upvotes - 1);
       setIsUpvoted(false);
@@ -69,6 +77,11 @@ export default function BlogDetail() {
   };
 
   const toggleDownvote = () => {
+    if (!auth?.token) {
+      navigate('/login', { state: { from: `/post/${postId}` } });
+      return;
+    }
+    
     if (isDownvoted) {
       setDownvotes(downvotes - 1);
       setIsDownvoted(false);
@@ -80,6 +93,15 @@ export default function BlogDetail() {
         setIsUpvoted(false);
       }
     }
+  };
+
+  const handleBookmark = () => {
+    if (!auth?.token) {
+      navigate('/login', { state: { from: `/post/${postId}` } });
+      return;
+    }
+    
+    setIsBookmarked(!isBookmarked);
   };
 
   if (loading) return <div className="text-white text-center">Loading post...</div>;
@@ -227,58 +249,57 @@ export default function BlogDetail() {
           <hr className="border-navbar-border mb-8" />
 
           {/* Action Bar */}
-<div className="flex items-center justify-between mb-8">
-  <div className="flex items-center space-x-6">
-    {/* Upvote */}
-    <button
-      onClick={toggleUpvote}
-      className={`flex items-center space-x-2 transition-colors ${
-        isUpvoted ? "text-green-400" : "text-periwinkle hover:text-white"
-      }`}
-    >
-      <span className="material-icons text-lg">arrow_upward</span>
-      <span className="font-lato font-medium">{upvotes}</span>
-    </button>
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center space-x-6">
+              {/* Upvote */}
+              <button
+                onClick={toggleUpvote}
+                className={`flex items-center space-x-2 transition-colors ${
+                  isUpvoted ? "text-green-400" : "text-periwinkle hover:text-white"
+                }`}
+              >
+                <span className="material-icons text-lg">arrow_upward</span>
+                <span className="font-lato font-medium">{upvotes}</span>
+              </button>
 
-    {/* Downvote */}
-    <button
-      onClick={toggleDownvote}
-      className={`flex items-center space-x-2 transition-colors ${
-        isDownvoted ? "text-red-400" : "text-periwinkle hover:text-white"
-      }`}
-    >
-      <span className="material-icons text-lg">arrow_downward</span>
-      <span className="font-lato font-medium">{downvotes}</span>
-    </button>
+              {/* Downvote */}
+              <button
+                onClick={toggleDownvote}
+                className={`flex items-center space-x-2 transition-colors ${
+                  isDownvoted ? "text-red-400" : "text-periwinkle hover:text-white"
+                }`}
+              >
+                <span className="material-icons text-lg">arrow_downward</span>
+                <span className="font-lato font-medium">{downvotes}</span>
+              </button>
 
-    {/* Views */}
-    <div className="flex items-center space-x-2 text-periwinkle">
-      <span className="material-icons text-lg">visibility</span>
-      <span className="font-lato font-medium">{post.views || 0}</span>
-    </div>
-  </div>
+              {/* Views */}
+              <div className="flex items-center space-x-2 text-periwinkle">
+                <span className="material-icons text-lg">visibility</span>
+                <span className="font-lato font-medium">{post.views || 0}</span>
+              </div>
+            </div>
 
-  {/* Share + Save */}
-  <div className="flex items-center space-x-4">
-    <button className="flex items-center space-x-2 px-4 py-2 border border-periwinkle text-periwinkle rounded-md hover:bg-periwinkle-light transition-colors font-lato">
-      <span className="material-icons text-lg">share</span>
-      <span>Share</span>
-    </button>
-    <button
-      onClick={() => setIsBookmarked(!isBookmarked)}
-      className="flex items-center space-x-2 px-4 py-2 border border-periwinkle text-periwinkle rounded-md hover:bg-periwinkle-light transition-colors font-lato"
-    >
-      <span className="material-icons text-lg">
-        {isBookmarked ? "bookmark" : "bookmark_border"}
-      </span>
-      <span>{isBookmarked ? "Saved" : "Save"}</span>
-    </button>
-  </div>
-</div>
-
+            {/* Share + Save */}
+            <div className="flex items-center space-x-4">
+              <button className="flex items-center space-x-2 px-4 py-2 border border-periwinkle text-periwinkle rounded-md hover:bg-periwinkle-light transition-colors font-lato">
+                <span className="material-icons text-lg">share</span>
+                <span>Share</span>
+              </button>
+              <button
+                onClick={handleBookmark}
+                className="flex items-center space-x-2 px-4 py-2 border border-periwinkle text-periwinkle rounded-md hover:bg-periwinkle-light transition-colors font-lato"
+              >
+                <span className="material-icons text-lg">
+                  {isBookmarked ? "bookmark" : "bookmark_border"}
+                </span>
+                <span>{isBookmarked ? "Saved" : "Save"}</span>
+              </button>
+            </div>
+          </div>
 
           {/* Comments */}
-          <Comments />
+          <Comment postId={postId} />
         </div>
       </div>
 
