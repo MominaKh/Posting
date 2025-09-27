@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { getProfile } from "../../api/ProfileApi";
 
 const BlogCard = ({
   id,
@@ -16,11 +17,53 @@ const BlogCard = ({
   comments = 0,
   views = 0,
   bookmarked = false,
+  user_id, // Add user_id prop to fetch profile
 }) => {
   // State for toggles
   const [isBookmarked, setIsBookmarked] = useState(bookmarked);
   const [isUpvoted, setIsUpvoted] = useState(false);
   const [isDownvoted, setIsDownvoted] = useState(false);
+  
+  // State for user profile
+  const [userProfile, setUserProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  // Fetch user profile on component mount
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user_id) {
+        console.log('No user_id provided for post:', id);
+        return;
+      }
+
+      setProfileLoading(true);
+      try {
+        console.log(`Fetching profile for user_id: ${user_id} (Post: ${id})`);
+        const response = await getProfile(user_id);
+        console.log('Profile API response for user', user_id, ':', response);
+        
+        if (response && response.data) {
+          setUserProfile(response.data);
+          console.log('User profile data for BlogCard:', {
+            user_id: user_id,
+            profileData: response.data,
+            name: response.data.name || response.data.user?.name || 'Unknown',
+            profileImage: response.data.profileImage,
+            username: response.data.username
+          });
+        } else {
+          console.log('No profile data found for user:', user_id);
+        }
+      } catch (error) {
+        console.error(`Error fetching profile for user ${user_id}:`, error);
+        console.log('Profile fetch failed, will use fallback data');
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, [user_id, id]);
 
   // Handlers
   const toggleBookmark = (e) => {
@@ -38,14 +81,24 @@ const BlogCard = ({
     if (isUpvoted) setIsUpvoted(false);
   };
 
-  // Ensure author object exists and has required properties
-  const safeAuthor = {
-    name: author?.name || "Unknown",
-    avatar:
-      author?.avatar ||
-      "https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff",
+  // Get author info from profile or fallback to props
+  const getAuthorInfo = () => {
+    if (userProfile) {
+      const name = userProfile.name || userProfile.user?.name || userProfile.username || "Unknown";
+      const avatar = userProfile.profileImage || 
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff`;
+      
+      return { name, avatar };
+    }
+    
+    // Fallback to props or default
+    return {
+      name: author?.name || "Unknown",
+      avatar: author?.avatar || "https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff"
+    };
   };
 
+  const authorInfo = getAuthorInfo();
   const safeTags = Array.isArray(tags) ? tags : [];
 
   return (
@@ -107,15 +160,24 @@ const BlogCard = ({
 
           {/* Author and actions */}
           <div className="flex justify-between items-center mt-auto">
-            {/* Author */}
+            {/* Author - Using fetched profile data */}
             <div className="flex items-center space-x-3">
-              <img
-                alt={safeAuthor.name}
-                className="w-8 h-8 rounded-full"
-                src={safeAuthor.avatar}
-              />
+              {profileLoading ? (
+                // Loading state for author
+                <div className="w-8 h-8 rounded-full bg-gray-600 animate-pulse"></div>
+              ) : (
+                <img
+                  alt={authorInfo.name}
+                  className="w-8 h-8 rounded-full object-cover"
+                  src={authorInfo.avatar}
+                  onError={(e) => {
+                    // Fallback image if profile image fails to load
+                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(authorInfo.name)}&background=0D8ABC&color=fff`;
+                  }}
+                />
+              )}
               <span className="font-lato text-periwinkle text-sm">
-                {safeAuthor.name}
+                {profileLoading ? "Loading..." : authorInfo.name}
               </span>
             </div>
 

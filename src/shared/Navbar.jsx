@@ -1,7 +1,27 @@
 import React, { useState } from "react";
+import { useAuth } from "../context/auth";
+import { useProfile } from "../context/profileContext";
 import Logo from "../assets/BytehiveLogo.png";
+
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { auth } = useAuth(); // Use auth context
+  const { profile, loading: profileLoading } = useProfile(); // Use profile context
+
+  // Get profile image with fallback
+  const getProfileImage = () => {
+    if (profile?.profileImage) {
+      return profile.profileImage;
+    }
+    // Generate fallback avatar using user's name or username
+    const name = profile?.name || profile?.username || auth?.user?.email || 'User';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff&size=128`;
+  };
+
+  // Get display name
+  const getDisplayName = () => {
+    return profile?.name || profile?.username || 'User';
+  };
 
   return (
     <header className="bg-navbar-bg backdrop-blur-sm sticky top-0 z-50 border-b border-navbar-border">
@@ -15,7 +35,6 @@ export default function Navbar() {
                 Bytehive
               </h1>
             </a>
-            
           </div>
 
           {/* DESKTOP NAV */}
@@ -26,14 +45,14 @@ export default function Navbar() {
                   <span className="material-icons text-4xl">grid_view</span>
                 </div>
               </a>
-              <a className="flex flex-col items-center text-columbia-blue hover:text-white transition-colors group" href="#">
+              <a className="flex flex-col items-center text-columbia-blue hover:text-white transition-colors group" href="/communities">
                 <div className="p-3 rounded-md bg-rich-black-light group-hover:bg-periwinkle-light transition-colors flex items-center justify-center">
-                  <span className="material-icons text-4xl">bookmark</span>
+                  <span className="material-icons text-4xl">groups</span>
                 </div>
               </a>
               <a className="flex flex-col items-center text-columbia-blue hover:text-white transition-colors group" href="#">
                 <div className="p-3 rounded-md bg-rich-black-light group-hover:bg-periwinkle-light transition-colors flex items-center justify-center">
-                  <span className="material-icons text-4xl">groups</span>
+                  <span className="material-icons text-4xl">bookmark</span>
                 </div>
               </a>
             </nav>
@@ -54,18 +73,51 @@ export default function Navbar() {
                 <span className="absolute top-1.5 right-1.5 block h-3 w-3 rounded-full bg-medium-slate-blue"></span>
               </button>
 
-              <button className="flex items-center justify-center">
-                <img
-                  alt="User avatar"
-                  className="w-11 h-11 rounded-full border-2 border-transparent hover:border-periwinkle transition-all"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0SOH_qdug48AdwWxvlB89VAMgWwLvCzU5nSDeh7sGBOxfcwtoGxXGFu3Q2JauQZWpKqk-GCgCttE6cJIsPEkbYBWNgz8qS6HIT-5Sz6LgHkDAzWnkSvAOUOk7CDaVV0qGaLh5TF5SZPN1EfhhvDKzelBH3komHVKuAU_sLPUdP82-LnV5uJEpBfaz0d1ZudZEkDGu7GEHq46ftKnljIDa0wEpEPuusxbFSIsOPoONgMi3EDnu1Bupe8IbBw6vKFxxdMaP6_2s5fii"
-                />
+              {/* Profile Button with dynamic image from profile context */}
+              <button 
+                className="flex items-center justify-center group relative"
+                title={`${getDisplayName()}'s Profile`}
+              >
+                {profileLoading ? (
+                  // Loading state - show skeleton
+                  <div className="w-11 h-11 rounded-full bg-gray-600 animate-pulse border-2 border-transparent"></div>
+                ) : (
+                  <img
+                    alt={`${getDisplayName()}'s profile`}
+                    className="w-11 h-11 rounded-full border-2 border-transparent hover:border-periwinkle transition-all object-cover"
+                    src={getProfileImage()}
+                    onError={(e) => {
+                      // Fallback if image fails to load
+                      const name = getDisplayName();
+                      e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff&size=128`;
+                    }}
+                  />
+                )}
+                
+                {/* Remove the hover tooltip - no longer showing user name on hover */}
               </button>
             </div>
           </div>
 
           {/* MOBILE MENU BUTTON */}
-          <div className="md:hidden flex items-center">
+          <div className="md:hidden flex items-center space-x-3">
+            {/* Mobile Profile Image */}
+            <button className="flex items-center justify-center">
+              {profileLoading ? (
+                <div className="w-8 h-8 rounded-full bg-gray-600 animate-pulse"></div>
+              ) : (
+                <img
+                  alt={`${getDisplayName()}'s profile`}
+                  className="w-8 h-8 rounded-full border-2 border-transparent hover:border-periwinkle transition-all object-cover"
+                  src={getProfileImage()}
+                  onError={(e) => {
+                    const name = getDisplayName();
+                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff&size=128`;
+                  }}
+                />
+              )}
+            </button>
+            
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="text-columbia-blue hover:text-white p-3 rounded-md hover:bg-periwinkle-light transition-colors"
@@ -81,11 +133,34 @@ export default function Navbar() {
       {/* MOBILE DROPDOWN */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-navbar-bg border-t border-navbar-border px-7 py-5 space-y-5 text-lg">
-          <a href="#" className="flex items-center space-x-4 text-columbia-blue hover:text-white transition-colors">
+          {/* Mobile Profile Section */}
+          {!profileLoading && (
+            <div className="flex items-center space-x-4 pb-3 border-b border-navbar-border">
+              <img
+                alt={`${getDisplayName()}'s profile`}
+                className="w-12 h-12 rounded-full object-cover"
+                src={getProfileImage()}
+                onError={(e) => {
+                  const name = getDisplayName();
+                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff&size=128`;
+                }}
+              />
+              <div>
+                <div className="text-white font-medium">{getDisplayName()}</div>
+                {profile?.bio && (
+                  <div className="text-columbia-blue text-sm truncate max-w-48">
+                    {profile.bio}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          <a href="/communities" className="flex items-center space-x-4 text-columbia-blue hover:text-white transition-colors">
             <span className="material-icons text-2xl">groups</span>
             <span>Communities</span>
           </a>
-          <a href="#" className="flex items-center space-x-4 text-columbia-blue hover:text-white transition-colors">
+          <a href="/events" className="flex items-center space-x-4 text-columbia-blue hover:text-white transition-colors">
             <span className="material-icons text-2xl">event</span>
             <span>Events</span>
           </a>
@@ -106,3 +181,4 @@ export default function Navbar() {
     </header>
   );
 }
+     

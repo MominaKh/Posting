@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/auth";
+import { getProfile } from "../../api/ProfileApi";
 import axios from "axios";
 import TextSelectionPopup from "./TextSelectionPopup";
 import Comment from "./Comment/Comment";
@@ -22,6 +23,10 @@ export default function BlogDetail() {
   const [isUpvoted, setIsUpvoted] = useState(false);
   const [isDownvoted, setIsDownvoted] = useState(false);
   const contentRef = useRef(null);
+  
+  // State for user profile
+  const [userProfile, setUserProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   useEffect(() => {
     const fetchPost = async () => {
@@ -32,6 +37,14 @@ export default function BlogDetail() {
         setPost(data);
         setUpvotes(data.upvotes || 0);
         setDownvotes(data.downvotes || 0);
+        
+        console.log('Post data loaded:', data);
+        console.log('Post user_id for profile fetch:', data.user_id);
+        
+        // Fetch user profile after post is loaded
+        if (data.user_id) {
+          fetchUserProfile(data.user_id);
+        }
       } catch (error) {
         setErr(error?.response?.data?.error || "Failed to load post");
       }
@@ -39,6 +52,58 @@ export default function BlogDetail() {
     };
     if (postId) fetchPost();
   }, [postId]);
+
+  const fetchUserProfile = async (userId) => {
+    if (!userId) {
+      console.log('No user_id provided for profile fetch');
+      return;
+    }
+
+    setProfileLoading(true);
+    try {
+      console.log(`Fetching profile for post author user_id: ${userId}`);
+      const response = await getProfile(userId);
+      console.log('Profile API response for post author:', response);
+      
+      if (response && response.data) {
+        setUserProfile(response.data);
+        console.log('Author profile data for BlogDetail:', {
+          user_id: userId,
+          profileData: response.data,
+          name: response.data.name || response.data.user?.name || 'Unknown',
+          profileImage: response.data.profileImage,
+          username: response.data.username,
+          bio: response.data.bio
+        });
+      } else {
+        console.log('No profile data found for post author:', userId);
+      }
+    } catch (error) {
+      console.error(`Error fetching profile for post author ${userId}:`, error);
+      console.log('Author profile fetch failed, will use fallback data');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  // Get author info from profile or fallback
+  const getAuthorInfo = () => {
+    if (userProfile) {
+      const name = userProfile.name || userProfile.user?.name || userProfile.username || "Unknown";
+      const avatar = userProfile.profileImage || 
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0D8ABC&color=fff`;
+      const bio = userProfile.bio || "No bio available";
+      
+      return { name, avatar, bio };
+    }
+    
+    // Fallback to post data or default
+    return {
+      name: post?.author?.name || "Unknown",
+      avatar: post?.author?.avatar || "https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff",
+      bio: "Author"
+    };
+  };
 
   const handleTextSelection = () => {
     const selection = window.getSelection();
@@ -107,6 +172,8 @@ export default function BlogDetail() {
   if (loading) return <div className="text-white text-center">Loading post...</div>;
   if (err) return <div className="text-red-400 text-center">{err}</div>;
   if (!post) return <div className="text-white text-center">No post found.</div>;
+
+  const authorInfo = getAuthorInfo();
 
   // Select which content to show
   const contentToRender =
@@ -192,18 +259,29 @@ export default function BlogDetail() {
             {post.post_title}
           </h1>
 
-          {/* Author Info */}
+          {/* Author Info - Using fetched profile data */}
           <div className="flex items-center space-x-3 mb-4">
-            <img
-              src={post.author?.avatar || "https://ui-avatars.com/api/?name=User"}
-              alt={post.author?.name || "Author"}
-              className="w-12 h-12 rounded-full"
-            />
+            {profileLoading ? (
+              // Loading state for author
+              <div className="w-12 h-12 rounded-full bg-gray-600 animate-pulse"></div>
+            ) : (
+              <img
+                src={authorInfo.avatar}
+                alt={authorInfo.name}
+                className="w-12 h-12 rounded-full object-cover"
+                onError={(e) => {
+                  // Fallback image if profile image fails to load
+                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(authorInfo.name)}&background=0D8ABC&color=fff`;
+                }}
+              />
+            )}
             <div>
               <div className="text-white font-lato font-medium text-base">
-                {post.author?.name || "Unknown"}
+                {profileLoading ? "Loading author..." : authorInfo.name}
               </div>
-              <div className="text-periwinkle text-sm font-lato">Author</div>
+              <div className="text-periwinkle text-sm font-lato">
+                {profileLoading ? "..." : authorInfo.bio}
+              </div>
             </div>
           </div>
 

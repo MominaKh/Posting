@@ -50,6 +50,7 @@ const BlogListing = () => {
                 comments: post.comments || 0,
                 views: post.views || 0,
                 bookmarked: false,
+                user_id: post.user_id, // Pass user_id to BlogCard for profile fetching
               }))
             : []
         );

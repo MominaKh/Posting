@@ -11,6 +11,7 @@ import VideoRoomButton from "../components/CommunityDetail/VideoRoomButton";
 import NewPostButton from "../shared/NewPostButton";
 import { communityApi } from "../api/communityApi";
 import { postsApi } from "../api/postsApi";
+import { getProfile } from "../api/ProfileApi";
 
 const FILTERS = ["Posts", "Members", "About"];
 const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=600&q=80";
@@ -27,6 +28,8 @@ const CommunityDetail = () => {
   const [postsLoading, setPostsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [memberProfiles, setMemberProfiles] = useState({});
+  const [membersLoading, setMembersLoading] = useState(false);
 
   // Initialize auth check and fetch community data
   useEffect(() => {
@@ -47,6 +50,13 @@ const CommunityDetail = () => {
   useEffect(() => {
     if (community && selectedFilter === "Posts") {
       fetchCommunityPosts();
+    }
+  }, [community, selectedFilter]);
+
+  // Fetch member profiles when community loads or Members tab is selected
+  useEffect(() => {
+    if (community && selectedFilter === "Members" && community.members && community.members.length > 0) {
+      fetchMemberProfiles();
     }
   }, [community, selectedFilter]);
 
@@ -158,8 +168,8 @@ const CommunityDetail = () => {
           title: post.post_title || "",
           description: post.small_description || "",
           tags: Array.isArray(post.tags) ? post.tags : [],
-          author: post.author || {
-            name: "Unknown",
+          author: {
+            name: "Loading...",
             avatar: "https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff",
           },
           upvotes: post.upvotes || 0,
@@ -167,12 +177,13 @@ const CommunityDetail = () => {
           comments: post.comments || 0,
           views: post.views || 0,
           bookmarked: false,
+          user_id: post.user_id // Pass user_id to BlogCard for profile fetching
         };
-        console.log('Transformed post:', transformed);
+        console.log('Transformed post with user_id:', transformed);
         return transformed;
       });
 
-      console.log('Final transformed posts:', transformedPosts);
+      console.log('Final transformed posts with user_id:', transformedPosts);
       setPosts(transformedPosts);
       console.log('=== fetchCommunityPosts completed ===');
       
@@ -181,6 +192,80 @@ const CommunityDetail = () => {
       setPosts([]);
     } finally {
       setPostsLoading(false);
+    }
+  };
+
+  const fetchMemberProfiles = async () => {
+    if (!community?.members || community.members.length === 0) {
+      console.log('No members to fetch profiles for');
+      return;
+    }
+
+    setMembersLoading(true);
+    try {
+      console.log('Fetching profiles for community members:', community.members);
+      
+      const memberIds = community.members.filter(Boolean);
+      
+      if (memberIds.length === 0) {
+        console.log('No valid member IDs found');
+        return;
+      }
+
+      const profilePromises = memberIds.map(async (memberId) => {
+        try {
+          console.log(`Fetching profile for member: ${memberId}`);
+          const profileRes = await getProfile(memberId);
+          console.log(`Profile response for member ${memberId}:`, profileRes);
+          
+          if (profileRes && profileRes.data) {
+            const profile = profileRes.data;
+            return { 
+              id: memberId, 
+              ...profile,
+              name: profile.name || profile.user?.name || profile.username || "Unknown User",
+              avatar: profile.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || profile.username || 'User')}&background=0D8ABC&color=fff`,
+              bio: profile.bio || "No bio available",
+              joinDate: profile.createdAt ? new Date(profile.createdAt).toLocaleDateString() : "Unknown",
+              email: profile.user?.email || "Email not available"
+            };
+          } else {
+            console.log(`No profile data found for member: ${memberId}`);
+            return {
+              id: memberId,
+              name: "Unknown User",
+              avatar: `https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff`,
+              bio: "Profile unavailable",
+              joinDate: "Unknown",
+              email: "Email not available"
+            };
+          }
+        } catch (error) {
+          console.error(`Error fetching profile for member ${memberId}:`, error);
+          return {
+            id: memberId,
+            name: "Unknown User",
+            avatar: `https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff`,
+            bio: "Profile unavailable",
+            joinDate: "Unknown",
+            email: "Email not available"
+          };
+        }
+      });
+
+      const memberProfilesData = await Promise.all(profilePromises);
+      const profilesMap = {};
+      
+      memberProfilesData.forEach(profile => {
+        profilesMap[profile.id] = profile;
+      });
+
+      console.log('Member profiles loaded:', profilesMap);
+      setMemberProfiles(profilesMap);
+    } catch (error) {
+      console.error('Error fetching member profiles:', error);
+    } finally {
+      setMembersLoading(false);
     }
   };
 
@@ -302,20 +387,52 @@ const CommunityDetail = () => {
       case "Members":
         return (
           <div className="flex flex-col gap-6 pb-12">
-            <h2 className="font-fenix text-3xl md:text-4xl text-white font-normal">Community Members</h2>
+            <div className="flex justify-between items-center">
+              <h2 className="font-fenix text-3xl md:text-4xl text-white font-normal">Community Members</h2>
+              {membersLoading && (
+                <div className="text-desc text-sm">Loading member profiles...</div>
+              )}
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {community.members && community.members.length > 0 ? (
-                community.members.map((member) => (
-                  <MemberCard key={member.id} {...member} />
-                ))
+                // Sort members: Admin first, then moderators, then regular members
+                community.members
+                  .map(memberId => {
+                    const memberProfile = memberProfiles[memberId];
+                    const isAdmin = community.user_id === memberId || community.user_id?._id === memberId;
+                    const isModerator = community.moderators && community.moderators.includes(memberId);
+                    
+                    return {
+                      memberId,
+                      memberProfile,
+                      isAdmin,
+                      isModerator,
+                      sortOrder: isAdmin ? 0 : (isModerator ? 1 : 2) // Admin = 0, Moderator = 1, Member = 2
+                    };
+                  })
+                  .sort((a, b) => a.sortOrder - b.sortOrder) // Sort by role priority
+                  .map(({ memberId, memberProfile, isAdmin, isModerator }) => (
+                    <MemberCard 
+                      key={memberId} 
+                      id={memberId}
+                      name={memberProfile?.name || (membersLoading ? "Loading..." : "Unknown User")}
+                      avatar={memberProfile?.avatar || "https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff"}
+                      username={memberProfile?.username || ""}
+                      isAdmin={isAdmin}
+                      isModerator={isModerator}
+                      loading={membersLoading && !memberProfile}
+                    />
+                  ))
               ) : (
-                <div className="text-center text-desc py-8">
+                <div className="col-span-full text-center text-desc py-8">
                   No members found in this community.
                 </div>
               )}
             </div>
           </div>
         );
+        
       case "About":
         return (
           <div className="pb-12">
