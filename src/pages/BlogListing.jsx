@@ -29,32 +29,30 @@ const BlogListing = () => {
       try {
         const res = await axios.get("http://localhost:5000/api/posts");
         setBlogs(
-  Array.isArray(res.data.posts)
-    ? res.data.posts.map((post) => ({
-        id: post._id,   // ✅ here
-        image: post.thumbnail || DEFAULT_IMAGE,
-        community: post.community || "",
-        date: post.createdAt
-          ? new Date(post.createdAt).toLocaleDateString()
-          : "",
-        readTime: post.read_time || "6 min",   // ✅ use correct field from DB
-        title: post.post_title || "",
-        description: post.small_description || "",
-        tags: post.tags || [],
-        author: post.author || {
-          name: "Unknown",
-          avatar:
-            "https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff",
-        },
-        upvotes: post.upvotes || 0,
-        downvotes: post.downvotes || 0,
-        comments: post.comments || 0,
-        views: post.views || 0,
-        bookmarked: false,
-      }))
-    : []
-);
-
+          Array.isArray(res.data.posts)
+            ? res.data.posts.map((post) => ({
+                id: post._id,
+                image: post.thumbnail || DEFAULT_IMAGE,
+                community: post.community_name || post.community || "",
+                date: post.createdAt
+                  ? new Date(post.createdAt).toLocaleDateString()
+                  : "",
+                readTime: post.read_time || "6 min",
+                title: post.post_title || "",
+                description: post.small_description || "",
+                tags: Array.isArray(post.tags) ? post.tags : [], // Ensure tags is array
+                author: post.author || {
+                  name: "Unknown",
+                  avatar: "https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff",
+                },
+                upvotes: post.upvotes || 0,
+                downvotes: post.downvotes || 0,
+                comments: post.comments || 0,
+                views: post.views || 0,
+                bookmarked: false,
+              }))
+            : []
+        );
       } catch (err) {
         setBlogs([]);
         setErr(

@@ -1,421 +1,421 @@
-import { jwtDecode } from 'jwt-decode';
+import { getAuthHeaders, getUserIdFromToken, AuthError } from '../utils/authUtils';
 
 const API_BASE_URL = 'http://localhost:5001/api';
 
-// Helper function to get authorization headers
-const getAuthHeaders = () => {
-  const authData = localStorage.getItem('Auth');
-  console.log('Auth data from localStorage:', authData);
-  
-  if (!authData) {
-    throw new Error('No token, authorization denied');
-  }
-  
+// Base API request handler
+const apiRequest = async (url, options = {}) => {
   try {
-    const parsed = JSON.parse(authData);
-    const token = parsed.token;
-    console.log('Extracted token:', token ? 'Token found' : 'No token in parsed data');
-    
-    if (!token) {
-      throw new Error('No token, authorization denied');
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      ...options,
+      headers: {
+        ...options.headers,
+      }
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    // Handle network connection errors specifically
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new Error(`Cannot connect to communities service at ${API_BASE_URL}. Please check if the server is running.`);
     }
     
-    const headers = {
-      'Authorization': `Bearer ${token}`
-    };
-    console.log('Authorization headers prepared:', headers);
-    return headers;
-  } catch (error) {
-    console.error('Error parsing auth data:', error);
-    throw new Error('Invalid token format, authorization denied');
+    if (error instanceof AuthError) {
+      throw error;
+    }
+    
+    throw error;
   }
 };
 
-// Helper function to extract user ID from auth token
-const getUserIdFromAuth = () => {
-  const authData = localStorage.getItem('Auth');
-  if (!authData) {
-    throw new Error('No auth data found');
+// Authenticated API request handler
+const authenticatedRequest = async (url, options = {}) => {
+  try {
+    const authHeaders = getAuthHeaders();
+    return await apiRequest(url, {
+      ...options,
+      headers: {
+        ...authHeaders,
+        ...options.headers,
+      }
+    });
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Form data builder for community operations
+const buildCommunityFormData = (communityData, imageFile = null, includeUserId = true) => {
+  const formData = new FormData();
+  
+  if (includeUserId) {
+    const userId = getUserIdFromToken();
+    formData.append('userId', userId);
   }
   
-  try {
-    const parsed = JSON.parse(authData);
-    console.log('Full parsed auth data:', parsed);
-    
-    if (!parsed.token) {
-      throw new Error('No token found in auth data');
-    }
-    
-    // Decode JWT token to extract user ID
-    const decoded = jwtDecode(parsed.token);
-    console.log('Decoded JWT payload:', decoded);
-    console.log('Available fields in JWT:', Object.keys(decoded));
-    
-    // Extract user ID from decoded token with detailed logging
-    const userId = decoded._id || decoded.id || decoded.user_id || decoded.userId;
-    
-    console.log('User ID extraction details:', {
-      '_id': decoded._id,
-      'id': decoded.id,
-      'user_id': decoded.user_id,
-      'userId': decoded.userId,
-      'finalUserId': userId
-    });
-    
-    if (!userId) {
-      console.error('No user ID found in JWT payload. Token payload:', decoded);
-      throw new Error('User ID not found in auth token');
-    }
-    
-    console.log('✅ Successfully extracted user ID from JWT:', userId);
-    return userId;
-  } catch (error) {
-    console.error('Error parsing auth data for user ID:', error);
-    throw new Error('Invalid auth token format');
+  if (communityData.community_name) {
+    formData.append('community_name', communityData.community_name);
   }
+  if (communityData.description) {
+    formData.append('description', communityData.description);
+  }
+  
+  if (communityData.community_tags && communityData.community_tags.length > 0) {
+    communityData.community_tags.forEach(tag => {
+      formData.append('community_tags[]', tag);
+    });
+  }
+  
+  if (communityData.visible) {
+    formData.append('visible', communityData.visible);
+  }
+  if (communityData.moderation) {
+    formData.append('moderation', communityData.moderation);
+  }
+  
+  if (imageFile && imageFile instanceof File) {
+    formData.append('image', imageFile);
+  }
+  
+  return formData;
 };
 
 export const communityApi = {
   // Discover Communities (Public)
   discoverCommunities: async (filters = {}) => {
-    try {
-      const queryParams = new URLSearchParams();
-      
-      if (filters.search) queryParams.append('search', filters.search);
-      if (filters.tags) queryParams.append('tags', filters.tags.join(','));
-      if (filters.page) queryParams.append('page', filters.page);
-      if (filters.limit) queryParams.append('limit', filters.limit);
-      if (filters.visible) queryParams.append('visible', filters.visible);
-      
-      const response = await fetch(
-        `${API_BASE_URL}/communities/discover?${queryParams}`,
-        {
-          method: 'GET',
-        }
-      );
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error discovering communities:', error);
-      throw error;
-    }
+    const queryParams = new URLSearchParams();
+    
+    if (filters.search) queryParams.append('search', filters.search);
+    if (filters.tags) queryParams.append('tags', filters.tags.join(','));
+    if (filters.page) queryParams.append('page', filters.page);
+    if (filters.limit) queryParams.append('limit', filters.limit);
+    if (filters.visible) queryParams.append('visible', filters.visible);
+    
+    return await apiRequest(`/communities/discover?${queryParams}`);
   },
 
   // Get Community Details (Public)
   getCommunityDetails: async (communityId) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/communities/${communityId}`, {
-        method: 'GET',
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting community details:', error);
-      throw error;
-    }
+    return await apiRequest(`/communities/${communityId}`);
+  },
+
+  // Get All Communities (Public)
+  getAllCommunities: async (searchQuery = '') => {
+    const queryParams = searchQuery.trim() 
+      ? `?search=${encodeURIComponent(searchQuery.trim())}`
+      : '';
+    
+    return await authenticatedRequest(`/communities/all${queryParams}`);
   },
 
   // Create Community (Protected)
   createCommunity: async (communityData, imageFile = null) => {
-    try {
-      const formData = new FormData();
-      
-      // Extract user_id from auth token using the helper function
-      let currentUserId = null;
-      try {
-        currentUserId = getUserIdFromAuth();
-        console.log('🔐 Current user ID from token for community creation:', currentUserId);
-      } catch (e) {
-        console.error('❌ Could not extract user ID from auth token:', e);
-        throw new Error('User authentication required. Please log in again.');
-      }
-      
-      // Include user_id in the form data
-      formData.append('user_id', currentUserId);
-      console.log('📤 Added user_id to FormData for backend:', currentUserId);
-      console.log('📋 Community data being sent:', {
-        community_name: communityData.community_name,
-        user_id: currentUserId,
-        description: communityData.description.substring(0, 100) + '...',
-        visible: communityData.visible,
-        moderation: communityData.moderation
-      });
-      
-      formData.append('community_name', communityData.community_name);
-      formData.append('description', communityData.description);
-      
-      // Send each tag individually for backend compatibility
-      if (communityData.community_tags && communityData.community_tags.length > 0) {
-        communityData.community_tags.forEach(tag => {
-          formData.append('community_tags[]', tag);
-        });
-      }
-      
-      if (communityData.visible) {
-        formData.append('visible', communityData.visible);
-      }
-      
-      if (communityData.moderation) {
-        formData.append('moderation', communityData.moderation);
-      }
-      
-      // Only append image if it exists and is valid
-      if (imageFile && imageFile instanceof File) {
-        console.log('Adding image to FormData:', {
-          name: imageFile.name,
-          type: imageFile.type,
-          size: imageFile.size
-        });
-        formData.append('image', imageFile);
-      } else if (imageFile) {
-        console.warn('Image file is not a valid File object:', typeof imageFile);
-      }
-      
-      // Debug: Log what's being sent
-      console.log('FormData contents:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`${key}:`, value);
-      }
-      
-      const response = await fetch(`${API_BASE_URL}/communities`, {
-        method: 'POST',
-        headers: {
-          ...getAuthHeaders()
-        },
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        let errorMessage = `HTTP error! status: ${response.status}`;
-        
-        try {
-          const errorData = await response.json();
-          console.error('Backend error response:', errorData);
-          errorMessage = errorData.message || errorData.error || errorMessage;
-          
-          // If there are validation errors, include them
-          if (errorData.errors) {
-            const validationErrors = Object.entries(errorData.errors)
-              .map(([field, message]) => `${field}: ${message}`)
-              .join(', ');
-            errorMessage += ` (Validation errors: ${validationErrors})`;
-          }
-        } catch (parseError) {
-          console.error('Could not parse error response as JSON:', parseError);
-          // Try to get text response
-          try {
-            const errorText = await response.text();
-            console.error('Error response text:', errorText);
-            if (errorText) {
-              errorMessage = errorText;
-            }
-          } catch (textError) {
-            console.error('Could not get error response text:', textError);
-          }
-        }
-        
-        throw new Error(errorMessage);
-      }
-      
-      const result = await response.json();
-      console.log('Community created successfully with user_id:', currentUserId, 'Result:', result);
-      return result;
-    } catch (error) {
-      console.error('Error creating community:', error);
-      
-      // If it's a network error or parsing error, provide more context
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        throw new Error('Network error: Unable to connect to server. Please check your connection.');
-      }
-      
-      throw error;
-    }
+    const formData = buildCommunityFormData(communityData, imageFile, true);
+    
+    return await authenticatedRequest('/communities', {
+      method: 'POST',
+      body: formData,
+    });
   },
 
-  // Update Community (Protected) 
+  // Update Community (Protected)
   updateCommunity: async (communityId, communityData, imageFile = null) => {
-    try {
-      const formData = new FormData();
-      
-      if (communityData.community_name) {
-        formData.append('community_name', communityData.community_name);
-      }
-      if (communityData.description) {
-        formData.append('description', communityData.description);
-      }
-      
-      // Handle tags properly - send each tag individually
-      if (communityData.community_tags && communityData.community_tags.length > 0) {
-        communityData.community_tags.forEach(tag => {
-          formData.append('community_tags[]', tag);
-        });
-      }
-      
-      if (communityData.visible) {
-        formData.append('visible', communityData.visible);
-      }
-      if (communityData.moderation) {
-        formData.append('moderation', communityData.moderation);
-      }
-      
-      if (imageFile) {
-        formData.append('image', imageFile);
-      }
-      
-      const response = await fetch(`${API_BASE_URL}/communities/${communityId}`, {
-        method: 'PUT',
-        headers: {
-          ...getAuthHeaders()
-        },
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error updating community:', error);
-      throw error;
-    }
-  },
-
-  // Follow Community (Protected)
-  followCommunity: async (communityId) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/communities/${communityId}/follow`, {
-        method: 'POST',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error following community:', error);
-      throw error;
-    }
-  },
-
-  // Unfollow Community (Protected)
-  unfollowCommunity: async (communityId) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/communities/${communityId}/unfollow`, {
-        method: 'DELETE',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json'
-        },
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error unfollowing community:', error);
-      throw error;
-    }
-  },
-
-  // Get User's Communities (Protected)
-  getUserCommunities: async (searchQuery = '', forceRefresh = false) => {
-    try {
-      console.log('getUserCommunities called with searchQuery:', searchQuery, 'forceRefresh:', forceRefresh);
-      
-      // Get auth data to extract user info for debugging using the helper function
-      let currentUserId = null;
-      try {
-        currentUserId = getUserIdFromAuth();
-        console.log('Current user ID from token:', currentUserId);
-      } catch (e) {
-        console.warn('Could not parse auth data for user ID:', e);
-      }
-      
-      let queryParams = searchQuery.trim() ? `?search=${encodeURIComponent(searchQuery.trim())}` : '';
-      
-      // Add cache-busting parameter if force refresh is requested
-      if (forceRefresh) {
-        const separator = queryParams ? '&' : '?';
-        queryParams += `${separator}_t=${Date.now()}`;
-      }
-      
-      const url = `${API_BASE_URL}/communities/user/my-communities${queryParams}`;
-      console.log('Making request to:', url);
-      
-      const headers = getAuthHeaders();
-      console.log('Using headers:', headers);
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: headers,
-      });
-      
-      console.log('Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-      }
-      
-      const data = await response.json();
-      console.log('User communities data received:', data);
-      
-      // Debug: Check if the returned communities actually belong to the current user
-      if (data.owned && currentUserId) {
-        console.log('Ownership verification:');
-        data.owned.forEach(community => {
-          const matches = community.user_id === currentUserId;
-          console.log(`Community "${community.community_name}" (${community._id}): user_id=${community.user_id}, currentUser=${currentUserId}, matches=${matches}`);
-        });
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error getting user communities:', error);
-      throw error;
-    }
+    const formData = buildCommunityFormData(communityData, imageFile, true);
+    
+    return await authenticatedRequest(`/communities/${communityId}`, {
+      method: 'PUT',
+      body: formData,
+    });
   },
 
   // Delete Community (Protected)
   deleteCommunity: async (communityId) => {
+    const userId = getUserIdFromToken();
+    
+    return await authenticatedRequest(`/communities/${communityId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ userId })
+    });
+  },
+
+  // Follow Community (Protected)
+  followCommunity: async (communityId) => {
+    const userId = getUserIdFromToken();
+    
+    return await authenticatedRequest(`/communities/${communityId}/follow`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ userId })
+    });
+  },
+
+  // Unfollow Community (Protected)
+  unfollowCommunity: async (communityId) => {
+    const userId = getUserIdFromToken();
+    
+    return await authenticatedRequest(`/communities/${communityId}/unfollow`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ userId })
+    });
+  },
+
+  // Get User's Communities (Protected)
+  getUserCommunities: async (searchQuery = '', forceRefresh = false) => {
+    const userId = getUserIdFromToken();
+    
+    let queryParams = searchQuery.trim() 
+      ? `?search=${encodeURIComponent(searchQuery.trim())}`
+      : '';
+    
+    if (forceRefresh) {
+      const separator = queryParams ? '&' : '?';
+      queryParams += `${separator}_t=${Date.now()}`;
+    }
+    
+    // Get user's owned and followed communities
+    const userCommunities = await authenticatedRequest(`/communities/user/${userId}${queryParams}`);
+    
+    // Get all communities to find moderated ones
+    const allCommunities = await communityApi.getAllCommunities(searchQuery); // Changed from this.getAllCommunities
+    
+    // Find communities where user is moderator but not owner or follower
+    const moderatedCommunities = (allCommunities.communities || []).filter(community => {
+      const isOwner = community.userId === userId;
+      const isFollower = userCommunities.followed?.some(fc => fc._id === community._id);
+      const isModerator = community.moderators && community.moderators.includes(userId);
+      
+      return isModerator && !isOwner && !isFollower;
+    });
+    
+    return {
+      owned: userCommunities.owned || [],
+      followed: [...(userCommunities.followed || []), ...moderatedCommunities]
+    };
+  },
+
+  // Add Moderator (Protected)
+  addModerator: async (communityId, moderatorUserId) => {
+    const userId = getUserIdFromToken();
+    
+    return await authenticatedRequest(`/communities/${communityId}/moderators`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ userId, moderatorUserId })
+    });
+  },
+
+  // Remove Moderator (Protected)
+  removeModerator: async (communityId, moderatorUserId) => {
+    const userId = getUserIdFromToken();
+    
+    return await authenticatedRequest(`/communities/${communityId}/moderators/${moderatorUserId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ userId })
+    });
+  },
+
+  // Update Community Settings (Protected)
+  updateCommunitySettings: async (communityId, settings) => {
+    const userId = getUserIdFromToken();
+    
+    return await authenticatedRequest(`/communities/${communityId}/settings`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ...settings, userId })
+    });
+  },
+
+  // Add Post to Community (Protected) - Updates community post count
+  addPostToCommunity: async (communityId, postId) => {
+    const userId = getUserIdFromToken();
+    
+    console.log('Adding post to community:', {
+      communityId,
+      postId,
+      userId,
+      url: `${API_BASE_URL}/communities/${communityId}/posts`
+    });
+    
     try {
-      const response = await fetch(`${API_BASE_URL}/communities/${communityId}`, {
-        method: 'DELETE',
+      const response = await authenticatedRequest(`/communities/${communityId}/posts`, {
+        method: 'POST',
         headers: {
-          ...getAuthHeaders(),
           'Content-Type': 'application/json'
         },
+        body: JSON.stringify({ userId, postId })
       });
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      console.log('Add post to community response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error in addPostToCommunity:', error);
+      
+      // Provide more specific error messages
+      if (error.message.includes('Cannot connect to communities service')) {
+        throw new Error('Communities service is unavailable. Post was created but community count may not be updated.');
+      } else if (error.message.includes('404')) {
+        throw new Error('Community post management endpoint not found. Please check if the route is properly configured.');
+      } else if (error.message.includes('403')) {
+        throw new Error('Access denied. You do not have permission to update this community.');
       }
       
-      return await response.json();
-    } catch (error) {
-      console.error('Error deleting community:', error);
       throw error;
+    }
+  },
+
+  // Remove Post from Community (Protected) - Updates community post count
+  removePostFromCommunity: async (communityId, postId) => {
+    const userId = getUserIdFromToken();
+    
+    console.log('Removing post from community:', {
+      communityId,
+      postId,
+      userId,
+      url: `${API_BASE_URL}/communities/${communityId}/posts/${postId}`
+    });
+    
+    try {
+      const response = await authenticatedRequest(`/communities/${communityId}/posts/${postId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ userId })
+      });
+      
+      console.log('Remove post from community response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error in removePostFromCommunity:', error);
+      
+      // Provide more specific error messages
+      if (error.message.includes('Cannot connect to communities service')) {
+        throw new Error('Communities service is unavailable. Post deletion may not update community count.');
+      } else if (error.message.includes('404')) {
+        throw new Error('Community or post not found for removal.');
+      } else if (error.message.includes('403')) {
+        throw new Error('Access denied. You do not have permission to remove posts from this community.');
+      }
+      
+      throw error;
+    }
+  },
+
+  // Get Community Posts (Public)
+  getCommunityPosts: async (communityId, page = 1, limit = 10) => {
+    console.log('getCommunityPosts called with:', { communityId, page, limit });
+    
+    const queryParams = new URLSearchParams();
+    queryParams.append('page', page);
+    queryParams.append('limit', limit);
+    
+    try {
+      const url = `/communities/${communityId}/posts?${queryParams}`;
+      console.log('Making request to:', `${API_BASE_URL}${url}`);
+      
+      const response = await apiRequest(url);
+      console.log('getCommunityPosts raw response:', response);
+      
+      // Check if the response structure is correct
+      if (response && response.community) {
+        console.log('Community posts found:', response.community.posts);
+        return {
+          ...response,
+          community: {
+            ...response.community,
+            posts: response.community.posts || []
+          }
+        };
+      } else {
+        console.log('Unexpected response structure:', response);
+        // Fallback: try to get posts directly from getCommunityDetails
+        const detailsResponse = await apiRequest(`/communities/${communityId}`);
+        console.log('Fallback - community details response:', detailsResponse);
+        
+        if (detailsResponse && detailsResponse.community && detailsResponse.community.posts) {
+          return {
+            success: true,
+            community: {
+              ...detailsResponse.community,
+              posts: detailsResponse.community.posts,
+              totalPosts: detailsResponse.community.posts.length,
+              page: parseInt(page),
+              limit: parseInt(limit),
+              totalPages: Math.ceil(detailsResponse.community.posts.length / limit)
+            }
+          };
+        }
+      }
+      
+      // If we get here, something went wrong
+      console.log('No posts found in any response format');
+      return {
+        success: false,
+        community: {
+          posts: [],
+          totalPosts: 0,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: 0
+        }
+      };
+    } catch (error) {
+      console.error('Error fetching community posts:', error);
+      
+      // Fallback: try to get posts from community details
+      try {
+        console.log('Attempting fallback to getCommunityDetails...');
+        const detailsResponse = await apiRequest(`/communities/${communityId}`);
+        console.log('Fallback response:', detailsResponse);
+        
+        if (detailsResponse && detailsResponse.community && detailsResponse.community.posts) {
+          console.log('Fallback successful, found posts:', detailsResponse.community.posts);
+          return {
+            success: true,
+            community: {
+              ...detailsResponse.community,
+              posts: detailsResponse.community.posts,
+              totalPosts: detailsResponse.community.posts.length,
+              page: parseInt(page),
+              limit: parseInt(limit),
+              totalPages: Math.ceil(detailsResponse.community.posts.length / limit)
+            }
+          };
+        }
+      } catch (fallbackError) {
+        console.error('Fallback also failed:', fallbackError);
+      }
+      
+      // Return safe fallback structure
+      return {
+        success: false,
+        community: {
+          posts: [],
+          totalPosts: 0,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: 0
+        }
+      };
     }
   },
 };

@@ -8,6 +8,7 @@ import Navbar from "../shared/Navbar";
 import CommunityCard from "../components/CommunityListing/CommunityCard";
 import CommunityFilterBar from "../components/CommunityListing/CommunityFilterBar";
 import { communityApi } from "../api/communityApi";
+import { getUserIdFromToken } from "../utils/authUtils";
 
 const FILTERS = ["Your Communities", "Discover Communities"];
 
@@ -205,19 +206,26 @@ const Communities = () => {
   // Get filtered communities based on selected filter
   const getFilteredCommunities = () => {
     if (selectedFilter === "Your Communities") {
-      console.log('Filtering user communities:', { owned: userCommunities.owned, followed: userCommunities.followed });
-      console.log('Authenticated user ID:', auth.user?._id);
+      // Get current user ID using auth utils
+      let currentUserId;
+      try {
+        currentUserId = getUserIdFromToken();
+      } catch (error) {
+        console.error('Error getting user ID:', error);
+        return [];
+      }
       
-      // Only show communities owned by the authenticated user
+      // Show communities owned by the authenticated user
       const ownedWithFlags = (userCommunities.owned || [])
         .filter(community => {
-          // Only check user_id field as per backend model
-          const isOwner = community.user_id === auth.user?._id;
+          // Handle both userId and user_id fields from backend
+          const isOwner = community.userId === currentUserId || community.user_id === currentUserId;
           console.log('🔍 Community ownership check:', {
             communityId: community._id,
             communityName: community.community_name,
+            community_userId: community.userId,
             community_user_id: community.user_id,
-            auth_user_id: auth.user?._id,
+            auth_user_id: currentUserId,
             isOwner
           });
           return isOwner;
@@ -229,66 +237,106 @@ const Communities = () => {
           memberCount: community.no_of_followers,
           postCount: community.no_of_posts,
           name: community.community_name,
-          id: community._id
+          id: community._id,
+          moderators: community.moderators || [],
+          userId: community.userId || community.user_id // Use whichever exists
         }));
 
-      // Only show communities followed by the authenticated user
-      const followedWithFlags = (userCommunities.followed || [])
+      // Show communities followed/moderated by the authenticated user
+      const followedAndModeratedWithFlags = (userCommunities.followed || [])
         .filter(community => {
-          // Ensure this community is actually followed by the current user
-          const isFollowed = community.members?.includes(auth.user?._id);
-          console.log('Community follow check:', {
+          // Handle both userId and user_id fields from backend
+          const isOwner = community.userId === currentUserId || community.user_id === currentUserId;
+          return !isOwner; // Exclude owned communities from this list
+        })
+        .map(community => {
+          const isFollower = community.members?.includes(currentUserId);
+          const isModerator = community.moderators && community.moderators.includes(currentUserId);
+          
+          console.log('Community follow/moderator check:', {
             communityId: community._id,
             communityName: community.community_name,
             members: community.members,
-            auth_user_id: auth.user?._id,
-            isFollowed
+            moderators: community.moderators,
+            auth_user_id: currentUserId,
+            isFollower,
+            isModerator
           });
-          return isFollowed;
-        })
-        .map(community => ({
-          ...community,
-          isFollowing: true,
-          isOwned: false,
-          memberCount: community.no_of_followers,
-          postCount: community.no_of_posts,
-          name: community.community_name,
-          id: community._id
-        }));
+          
+          return {
+            ...community,
+            isFollowing: isFollower,
+            isOwned: false,
+            memberCount: community.no_of_followers,
+            postCount: community.no_of_posts,
+            name: community.community_name,
+            id: community._id,
+            moderators: community.moderators || [],
+            userId: community.userId || community.user_id // Use whichever exists
+          };
+        });
 
-      const result = [...ownedWithFlags, ...followedWithFlags];
+      const result = [...ownedWithFlags, ...followedAndModeratedWithFlags];
       console.log('Filtered user communities result:', {
         ownedCount: ownedWithFlags.length,
-        followedCount: followedWithFlags.length,
+        followedAndModeratedCount: followedAndModeratedWithFlags.length,
         totalCount: result.length,
-        communities: result.map(c => ({ id: c.id, name: c.name, isOwned: c.isOwned }))
+        communities: result.map(c => ({ 
+          id: c.id, 
+          name: c.name, 
+          isOwned: c.isOwned, 
+          isFollowing: c.isFollowing,
+          isModerator: c.moderators?.includes(currentUserId),
+          isFollower: c.members?.includes(currentUserId)
+        }))
       });
       return result;
       
     } else {
-      // Show discover communities (exclude user's own communities)
+      // Show discover communities
+      let currentUserId;
+      try {
+        currentUserId = getUserIdFromToken();
+      } catch (error) {
+        console.error('Error getting user ID:', error);
+        currentUserId = null;
+      }
+      
       return discoverCommunities
         .filter(community => {
-          // Exclude communities owned by the user
-          const isOwnedByUser = community.user_id === auth.user?._id || 
-                               community.owner_id === auth.user?._id || 
-                               community.created_by === auth.user?._id;
-          return !isOwnedByUser;
-        })
-        .map(community => {
-          // Check if user is already following this community
-          const isFollowing = userCommunities.followed.some(fc => fc._id === community._id);
+          if (!currentUserId) return true;
           
-          return {
-            ...community,
-            isFollowing,
-            isOwned: false, // These are not owned by the user
-            memberCount: community.no_of_followers,
-            postCount: community.no_of_posts,
-            name: community.community_name,
-            id: community._id
-          };
-        });
+          // Handle both userId and user_id fields from backend
+          const isOwnedByUser = community.userId === currentUserId || community.user_id === currentUserId;
+          
+          // Exclude communities where user is moderator
+          const isModerator = community.moderators && community.moderators.includes(currentUserId);
+          
+          // Exclude communities where user is follower
+          const isFollower = userCommunities.followed.some(fc => fc._id === community._id);
+          
+          console.log('Discover community filter:', {
+            communityId: community._id,
+            communityName: community.community_name,
+            isOwnedByUser,
+            isModerator,
+            isFollower,
+            shouldExclude: isOwnedByUser || isModerator || isFollower
+          });
+          
+          return !isOwnedByUser && !isModerator && !isFollower;
+        })
+        .map(community => ({
+          ...community,
+          isFollowing: false,
+          isOwned: false,
+          memberCount: community.no_of_followers,
+          postCount: community.no_of_posts,
+          name: community.community_name,
+          id: community._id,
+          moderators: community.moderators || [],
+          userId: community.userId || community.user_id // Use whichever exists
+        }));
     }
   };
 

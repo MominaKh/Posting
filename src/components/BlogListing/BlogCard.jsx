@@ -9,12 +9,12 @@ const BlogCard = ({
   readTime,
   title,
   description,
-  tags,
-  author,
-  upvotes,
-  downvotes,
-  comments,
-  views,
+  tags = [], // Default to empty array
+  author = { name: "Unknown", avatar: "" }, // Default author object
+  upvotes = 0,
+  downvotes = 0,
+  comments = 0,
+  views = 0,
   bookmarked = false,
 }) => {
   // State for toggles
@@ -37,6 +37,16 @@ const BlogCard = ({
     setIsDownvoted(!isDownvoted);
     if (isUpvoted) setIsUpvoted(false);
   };
+
+  // Ensure author object exists and has required properties
+  const safeAuthor = {
+    name: author?.name || "Unknown",
+    avatar:
+      author?.avatar ||
+      "https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff",
+  };
+
+  const safeTags = Array.isArray(tags) ? tags : [];
 
   return (
     <Link
@@ -85,9 +95,9 @@ const BlogCard = ({
 
           {/* Tags */}
           <div className="flex items-center space-x-2 mb-4">
-            {tags.map((tag, i) => (
+            {safeTags.map((tag, index) => (
               <span
-                key={i}
+                key={index}
                 className="bg-chip text-periwinkle text-xs font-semibold px-3 py-1 rounded-xl"
               >
                 #{tag}
@@ -100,12 +110,12 @@ const BlogCard = ({
             {/* Author */}
             <div className="flex items-center space-x-3">
               <img
-                alt={author.name}
+                alt={safeAuthor.name}
                 className="w-8 h-8 rounded-full"
-                src={author.avatar}
+                src={safeAuthor.avatar}
               />
               <span className="font-lato text-periwinkle text-sm">
-                {author.name}
+                {safeAuthor.name}
               </span>
             </div>
 

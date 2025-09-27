@@ -230,50 +230,15 @@ const CommunityFormCard = () => {
     setError(null);
 
     try {
-      // Debug: Log form data before sending
-      console.log('Form data being sent:', {
-        ...formData,
-        imageFile: imageFile ? {
-          name: imageFile.name,
-          type: imageFile.type,
-          size: imageFile.size,
-          lastModified: imageFile.lastModified
-        } : null
-      });
-
-      // Try creating community without image first if image upload fails
-      let response;
-      try {
-        response = await communityApi.createCommunity(formData, imageFile);
-        console.log('Community creation successful! Response:', response);
-      } catch (imageError) {
-        console.error('Error with image upload:', imageError);
-        
-        // If the error is specifically about image upload, try without image
-        if (imageError.message.includes('Image upload failed') || 
-            imageError.message.includes('Image') || 
-            imageError.message.includes('upload')) {
-          
-          console.log('Attempting to create community without image...');
-          setError('Image upload failed. Creating community without image...');
-          
-          // Wait a moment to show the message
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Try again without image
-          response = await communityApi.createCommunity(formData, null);
-          console.log('Community creation successful (without image)! Response:', response);
-        } else {
-          throw imageError;
-        }
-      }
+      // Pass auth.user._id to createCommunity instead of letting API decode JWT
+      const response = await communityApi.createCommunity(formData, imageFile, auth.user._id);
       
       setSuccess(true);
       
       // Clear the draft since community was created successfully
       localStorage.removeItem('communityDraft');
       
-      // Navigate back to communities page after a short delay with state to trigger refresh
+      // Navigate back to communities page after a short delay
       setTimeout(() => {
         navigate('/communities', { 
           state: { 
@@ -286,7 +251,6 @@ const CommunityFormCard = () => {
     } catch (err) {
       console.error('Error creating community:', err);
       
-      // Provide more specific error messages based on common issues
       let errorMessage = err.message || 'Failed to create community. Please try again.';
       
       if (errorMessage.includes('Image upload failed')) {
@@ -295,6 +259,12 @@ const CommunityFormCard = () => {
         errorMessage = 'Please check that all required fields are filled correctly and try again.';
       } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
         errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (errorMessage.includes('token') || errorMessage.includes('auth')) {
+        errorMessage = 'Authentication error. Please log in again.';
+        // Redirect to login after a delay
+        setTimeout(() => {
+          navigate('/login', { state: { from: location.pathname } });
+        }, 2000);
       }
       
       setError(errorMessage);

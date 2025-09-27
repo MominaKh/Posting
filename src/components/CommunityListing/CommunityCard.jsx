@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { communityApi } from "../../api/communityApi";
+import { getUserIdFromToken, canEditCommunity, canDeleteCommunity, isOwnerOfCommunity } from "../../utils/authUtils";
 
 const CommunityCard = ({ 
   id = 1, 
@@ -16,6 +17,9 @@ const CommunityCard = ({
   community_tags = [],
   visible = "public",
   moderation = "only admin",
+  moderators = [],
+  userId, // Could be userId or user_id from backend
+  user_id, // Fallback field
   isFollowing = false,
   isOwned = false,
   onFollowToggle,
@@ -35,6 +39,28 @@ const CommunityCard = ({
   const communityName = community_name || name;
   const followers = no_of_followers || memberCount;
   const posts = no_of_posts || postCount;
+
+  // Handle both userId and user_id field names
+  const communityUserId = userId || user_id;
+
+  // Permission checks using auth utils
+  const canEdit = React.useMemo(() => {
+    try {
+      const currentUserId = getUserIdFromToken();
+      return canEditCommunity({ userId: communityUserId, moderators }, currentUserId);
+    } catch (error) {
+      return false;
+    }
+  }, [communityUserId, moderators]);
+
+  const canDelete = React.useMemo(() => {
+    try {
+      const currentUserId = getUserIdFromToken();
+      return canDeleteCommunity({ userId: communityUserId }, currentUserId);
+    } catch (error) {
+      return false;
+    }
+  }, [communityUserId]);
 
   React.useEffect(() => {
     setFollowing(isFollowing);
@@ -89,6 +115,8 @@ const CommunityCard = ({
   const handleViewCommunity = (e) => {
     e.stopPropagation();
     e.preventDefault();
+    // Make sure we're navigating to the correct route with proper community ID
+    console.log('Navigating to community:', communityId);
     navigate(`/community/${communityId}`);
   };
 
@@ -97,8 +125,8 @@ const CommunityCard = ({
       className="bg-navbar-bg rounded-xl overflow-hidden border hover:border-periwinkle transition-colors relative w-full"
       style={{ border: "1px solid var(--navbar-border)" }}
     >
-      {/* Kebab Menu */}
-      {isOwned && (
+      {/* Kebab Menu - Show if user can edit or delete */}
+      {(canEdit || canDelete) && (
         <div className="absolute top-4 right-4 z-20">
           <button
             onClick={(e) => {
@@ -113,24 +141,28 @@ const CommunityCard = ({
           {showKebabMenu && (
             <>
               <div className="absolute top-8 right-0 bg-navbar-bg border border-navbar-border rounded-lg shadow-lg min-w-[140px] z-30">
-                <button
-                  onClick={handleEdit}
-                  className="w-full text-left px-4 py-3 text-white hover:bg-white/10 transition-colors flex items-center gap-2 rounded-t-lg"
-                >
-                  <span className="material-icons text-sm">edit</span>
-                  Edit
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowKebabMenu(false);
-                    setShowDeleteConfirm(true);
-                  }}
-                  className="w-full text-left px-4 py-3 text-red-400 hover:bg-red-400/10 transition-colors flex items-center gap-2 rounded-b-lg"
-                >
-                  <span className="material-icons text-sm">delete</span>
-                  Delete
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={handleEdit}
+                    className="w-full text-left px-4 py-3 text-white hover:bg-white/10 transition-colors flex items-center gap-2 rounded-t-lg"
+                  >
+                    <span className="material-icons text-sm">edit</span>
+                    Edit
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowKebabMenu(false);
+                      setShowDeleteConfirm(true);
+                    }}
+                    className={`w-full text-left px-4 py-3 text-red-400 hover:bg-red-400/10 transition-colors flex items-center gap-2 ${!canEdit ? 'rounded-t-lg' : ''} rounded-b-lg`}
+                  >
+                    <span className="material-icons text-sm">delete</span>
+                    Delete
+                  </button>
+                )}
               </div>
               <div 
                 className="fixed inset-0 z-10" 
@@ -249,15 +281,18 @@ const CommunityCard = ({
             community_tags,
             visible,
             moderation,
-            image
+            image,
+            moderators,
+            userId: communityUserId // Pass the resolved userId
           }}
           onClose={() => setShowEditModal(false)}
           onUpdate={onUpdate}
+          canDelete={canDelete}
         />
       )}
 
-      {/* Delete Modal */}
-      {showDeleteConfirm && (
+      {/* Delete Modal - Only show if user can delete */}
+      {showDeleteConfirm && canDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-navbar-bg border border-navbar-border rounded-lg p-6 max-w-md w-full">
             <h3 className="text-white font-fenix text-xl mb-4">Delete Community</h3>
@@ -289,8 +324,8 @@ const CommunityCard = ({
   );
 };
 
-// Edit Community Modal Component with synced backend validation
-const EditCommunityModal = ({ community, onClose, onUpdate }) => {
+// Edit Community Modal Component
+const EditCommunityModal = ({ community, onClose, onUpdate, canDelete }) => {
   const [formData, setFormData] = useState({
     community_name: community.community_name,
     description: community.description,
@@ -318,6 +353,16 @@ const EditCommunityModal = ({ community, onClose, onUpdate }) => {
     community_name: false,
     description: false
   });
+
+  // Check if current user is owner using auth utils
+  const isOwner = React.useMemo(() => {
+    try {
+      const currentUserId = getUserIdFromToken();
+      return isOwnerOfCommunity({ userId: community.userId }, currentUserId);
+    } catch (error) {
+      return false;
+    }
+  }, [community.userId]);
 
   // Validation functions - SYNCED WITH BACKEND
   const validateCommunityName = (value) => {
@@ -537,7 +582,12 @@ const EditCommunityModal = ({ community, onClose, onUpdate }) => {
       >
         {/* Fixed Header */}
         <div className="sticky top-0 bg-navbar-bg p-6 flex justify-between items-center rounded-t-lg">
-          <h3 className="text-white font-fenix text-xl">Edit Community</h3>
+          <div>
+            <h3 className="text-white font-fenix text-xl">Edit Community</h3>
+            {!isOwner && (
+              <p className="text-desc text-sm mt-1">Editing as moderator</p>
+            )}
+          </div>
           <button 
             onClick={onClose}
             className="text-white hover:text-periwinkle transition-colors p-1"
@@ -678,35 +728,51 @@ const EditCommunityModal = ({ community, onClose, onUpdate }) => {
               )}
             </div>
 
-            {/* Settings */}
+            {/* Settings - Some restrictions for moderators */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-white font-fenix mb-2">Visibility</label>
+                <label className="block text-white font-fenix mb-2">
+                  Visibility {!isOwner && <span className="text-desc text-xs">(Owner only)</span>}
+                </label>
                 <select 
                   name="visible"
                   value={formData.visible}
                   onChange={handleInputChange}
-                  className="w-full bg-transparent border border-navbar-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-periwinkle transition-colors"
+                  disabled={!isOwner} // Only owner can change visibility
+                  className={`w-full bg-transparent border border-navbar-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-periwinkle transition-colors ${
+                    !isOwner ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                   style={{ backgroundColor: "var(--navbar-bg)" }}
                 >
                   <option value="public" className="bg-rich-black">Public</option>
                   <option value="private" className="bg-rich-black">Private</option>
                 </select>
+                {!isOwner && (
+                  <p className="text-xs text-desc mt-1">Only the community owner can change visibility settings</p>
+                )}
               </div>
 
               <div>
-                <label className="block text-white font-fenix mb-2">Moderation</label>
+                <label className="block text-white font-fenix mb-2">
+                  Moderation {!isOwner && <span className="text-desc text-xs">(Owner only)</span>}
+                </label>
                 <select 
                   name="moderation"
                   value={formData.moderation}
                   onChange={handleInputChange}
-                  className="w-full bg-transparent border border-navbar-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-periwinkle transition-colors"
+                  disabled={!isOwner} // Only owner can change moderation settings
+                  className={`w-full bg-transparent border border-navbar-border rounded-lg px-4 py-2 text-white focus:outline-none focus:border-periwinkle transition-colors ${
+                    !isOwner ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                   style={{ backgroundColor: "var(--navbar-bg)" }}
                 >
                   <option value="only admin" className="bg-rich-black">Only Admin</option>
                   <option value="allow moderators" className="bg-rich-black">Allow Moderators</option>
                   <option value="allow all" className="bg-rich-black">Allow All</option>
                 </select>
+                {!isOwner && (
+                  <p className="text-xs text-desc mt-1">Only the community owner can change moderation settings</p>
+                )}
               </div>
             </div>
 
@@ -774,4 +840,5 @@ const EditCommunityModal = ({ community, onClose, onUpdate }) => {
     </div>
   );
 };
+
 export default CommunityCard;
