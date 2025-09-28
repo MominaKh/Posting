@@ -19,6 +19,8 @@ import { ProfileProvider } from "./context/profileContext";
 import CreateCommunity from "./pages/CreateCommunity";
 import Communities from "./pages/Communities";
 import CommunityDetail from "./pages/CommunityDetail";
+import SavedItems from "./pages/SavedItems";
+import History from "./pages/History";
 
 function App() {
   return (
@@ -47,6 +49,8 @@ function App() {
             <Route path="/create-community" element={<CreateCommunity />} />
             <Route path="/communities" element={<Communities />} />
             <Route path="/community/:id" element={<CommunityDetail />} />
+            <Route path="/saved" element={<SavedItems />} />
+            <Route path="/history" element={<History />} />
           </Routes>
         </NotificationProvider>
       </ProfileProvider>
