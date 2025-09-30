@@ -176,7 +176,6 @@ const CommunityDetail = () => {
           downvotes: post.downvotes || 0,
           comments: post.comments || 0,
           views: post.views || 0,
-          bookmarked: false,
           user_id: post.user_id // Pass user_id to BlogCard for profile fetching
         };
         console.log('Transformed post with user_id:', transformed);

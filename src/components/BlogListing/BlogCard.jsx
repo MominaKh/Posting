@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getProfile } from "../../api/ProfileApi";
+import { useSavePost } from "../../hooks/useSavePost";
+import { recordView } from "../../api/curationApi";
 
 const BlogCard = ({
   id,
@@ -16,17 +18,21 @@ const BlogCard = ({
   downvotes = 0,
   comments = 0,
   views = 0,
-  bookmarked = false,
   user_id, // Add user_id prop to fetch profile
 }) => {
   // State for toggles
-  const [isBookmarked, setIsBookmarked] = useState(bookmarked);
   const [isUpvoted, setIsUpvoted] = useState(false);
   const [isDownvoted, setIsDownvoted] = useState(false);
   
   // State for user profile
   const [userProfile, setUserProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
+
+  // Use the save post hook for bookmark functionality
+  const { isSaved, isLoading: saveLoading, toggleSave } = useSavePost(id);
+
+  // Navigation hook
+  const navigate = useNavigate();
 
   // Fetch user profile on component mount
   useEffect(() => {
@@ -66,9 +72,27 @@ const BlogCard = ({
   }, [user_id, id]);
 
   // Handlers
-  const toggleBookmark = (e) => {
+  const handleCardClick = async (e) => {
+    e.preventDefault(); // prevent default Link navigation
+    try {
+      // Record the view in history
+      await recordView(id);
+      console.log(`Recorded view for post ${id}`);
+    } catch (error) {
+      console.error('Error recording view:', error);
+      // Continue with navigation even if history recording fails
+    }
+    // Navigate to the post detail page
+    navigate(`/post/${id}`);
+  };
+
+  const toggleBookmark = async (e) => {
     e.preventDefault(); // prevent navigation
-    setIsBookmarked(!isBookmarked);
+    try {
+      await toggleSave('Saved'); // Default category
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+    }
   };
   const toggleUpvote = (e) => {
     e.preventDefault();
@@ -104,6 +128,7 @@ const BlogCard = ({
   return (
     <Link
       to={`/post/${id}`}
+      onClick={handleCardClick}
       className="block bg-navbar-bg rounded-xl overflow-hidden border z-0 hover:bg-white/5 transition"
       style={{ border: "1px solid var(--navbar-border)" }}
     >
@@ -228,14 +253,15 @@ const BlogCard = ({
           {/* Bookmark */}
           <button
             onClick={toggleBookmark}
+            disabled={saveLoading}
             className={`absolute top-4 right-4 p-2 rounded-full transition-colors ${
-              isBookmarked
+              isSaved
                 ? "text-periwinkle"
                 : "text-periwinkle hover:text-white"
-            }`}
+            } ${saveLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <span className="material-icons">
-              {isBookmarked ? "bookmark" : "bookmark_border"}
+              {isSaved ? "bookmark" : "bookmark_border"}
             </span>
           </button>
         </div>

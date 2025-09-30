@@ -4,30 +4,41 @@ import SearchBar from "../../shared/SearchBar";
 import BlogCard from "../BlogListing/BlogCard";
 import { getSavedPosts, searchSavedPosts } from "../../api/curationApi";
 import LoadingState from "../../shared/LoadingState.jsx";
-import ErrorState from "../../shared/ErrorState.jsx";
 
 const SavedPage = () => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   
   const formatPostData = (post) => ({
     ...post,
-    id: post._id,
-    date: new Date(post.createdAt).toLocaleDateString(),
-    bookmarked: true
+    id: post.postId || post._id,
+    date: new Date(post.savedAt || post.createdAt).toLocaleDateString(),
+    // For now, we'll use placeholder data until the backend is updated to populate full post data
+    title: post.title || `Saved Post ${post.postId}`,
+    description: post.description || 'This post has been saved to your collection.',
+    image: post.image || 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=600&q=80',
+    community: post.community || 'General',
+    readTime: post.readTime || '5 min',
+    tags: post.tags || [],
+    author: post.author || { name: 'Unknown', avatar: '' },
+    upvotes: post.upvotes || 0,
+    downvotes: post.downvotes || 0,
+    comments: post.comments || 0,
+    views: post.views || 0,
+    user_id: post.user_id
   });
 
   const fetchSavedPosts = async () => {
     try {
       setLoading(true);
       const response = await getSavedPosts();
-      const formattedPosts = response.data.map(formatPostData);
+      // Handle different response structures
+      const postsData = response.data || response || [];
+      const formattedPosts = Array.isArray(postsData) ? postsData.map(formatPostData) : [];
       setPosts(formattedPosts);
-      setError(null);
-    } catch (err) {
-      setError("Failed to fetch saved posts. Please try again later.");
+    } catch (error) {
+      console.error('Error fetching saved posts:', error);
       setPosts([]);
     } finally {
       setLoading(false);
@@ -48,20 +59,17 @@ const SavedPage = () => {
     try {
       setLoading(true);
       const response = await searchSavedPosts(query);
-      const formattedPosts = response.data.map(formatPostData);
+      // Handle different response structures
+      const postsData = response.data || response || [];
+      const formattedPosts = Array.isArray(postsData) ? postsData.map(formatPostData) : [];
       setPosts(formattedPosts);
-      setError(null);
-    } catch (err) {
-      setError("Failed to search saved posts. Please try again later.");
+    } catch (error) {
+      console.error('Error searching saved posts:', error);
       setPosts([]);
     } finally {
       setLoading(false);
     }
   };
-
-  if (error) {
-    return <ErrorState message={error} onRetry={fetchSavedPosts} />;
-  }
 
   if (loading) {
     return <LoadingState message="Loading saved posts..." />;
@@ -125,6 +133,7 @@ const SavedPage = () => {
               {posts.map((post) => (
                 <BlogCard
                   key={post.id}
+                  id={post.postId || post._id} // Use postId from saved post data, fallback to _id
                   image={post.image}
                   community={post.community}
                   date={post.date}
@@ -137,7 +146,7 @@ const SavedPage = () => {
                   downvotes={post.downvotes}
                   comments={post.comments}
                   views={post.views}
-                  postId={post._id}
+                  user_id={post.user_id}
                 />
               ))}
             </div>
