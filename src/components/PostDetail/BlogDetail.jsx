@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
+import { useSavePost } from "../../hooks/useSavePost";
+import { unsavePost } from "../../api/curationApi";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/auth";
 import { getProfile } from "../../api/ProfileApi";
@@ -17,7 +19,9 @@ export default function BlogDetail() {
   const [showPopup, setShowPopup] = useState(false);
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [selectedText, setSelectedText] = useState("");
-  const [isBookmarked, setIsBookmarked] = useState(false);
+  // Save/Watch Later logic
+  const { isSaved, category, isLoading: saveLoading, toggleSave, updateCategory } = useSavePost(postId);
+  const [showBookmarkMenu, setShowBookmarkMenu] = useState(false);
   const [upvotes, setUpvotes] = useState(0);
   const [downvotes, setDownvotes] = useState(0);
   const [isUpvoted, setIsUpvoted] = useState(false);
@@ -160,13 +164,20 @@ export default function BlogDetail() {
     }
   };
 
-  const handleBookmark = () => {
-    if (!auth?.token) {
-      navigate('/login', { state: { from: `/post/${postId}` } });
-      return;
-    }
-    
-    setIsBookmarked(!isBookmarked);
+
+  const handleBookmarkMenu = (e) => {
+    e.stopPropagation();
+    setShowBookmarkMenu((prev) => !prev);
+  };
+
+  const handleSave = async (cat) => {
+    setShowBookmarkMenu(false);
+    await toggleSave(cat);
+  };
+
+  const handleUnsave = async () => {
+    setShowBookmarkMenu(false);
+    await unsavePost(postId);
   };
 
   if (loading) return <div className="text-white text-center">Loading post...</div>;
@@ -364,15 +375,45 @@ export default function BlogDetail() {
                 <span className="material-icons text-lg">share</span>
                 <span>Share</span>
               </button>
-              <button
-                onClick={handleBookmark}
-                className="flex items-center space-x-2 px-4 py-2 border border-periwinkle text-periwinkle rounded-md hover:bg-periwinkle-light transition-colors font-lato"
-              >
-                <span className="material-icons text-lg">
-                  {isBookmarked ? "bookmark" : "bookmark_border"}
-                </span>
-                <span>{isBookmarked ? "Saved" : "Save"}</span>
-              </button>
+              <div className="relative bookmark-action-area" onClick={e => e.stopPropagation()}>
+                <button
+                  onClick={handleBookmarkMenu}
+                  disabled={saveLoading}
+                  className="flex items-center space-x-2 px-4 py-2 border border-periwinkle text-periwinkle rounded-md hover:bg-periwinkle-light transition-colors font-lato"
+                >
+                  <span className="material-icons text-lg">
+                    {isSaved ? "bookmark" : "bookmark_border"}
+                  </span>
+                  <span>{isSaved ? (category === 'Watch Later' ? 'Watch Later' : 'Saved') : 'Save'}</span>
+                </button>
+                {showBookmarkMenu && (
+                  <div className="absolute right-0 mt-2 w-40 bg-rich-black border border-navbar-border rounded-lg shadow-lg z-50">
+                    <button
+                      className="block w-full text-left px-4 py-2 hover:bg-periwinkle-light text-white"
+                      onClick={e => { e.stopPropagation(); handleSave('Saved'); }}
+                      disabled={saveLoading || (isSaved && category === 'Saved')}
+                    >
+                      Save
+                    </button>
+                    <button
+                      className="block w-full text-left px-4 py-2 hover:bg-periwinkle-light text-white"
+                      onClick={e => { e.stopPropagation(); handleSave('Watch Later'); }}
+                      disabled={saveLoading || (isSaved && category === 'Watch Later')}
+                    >
+                      Watch Later
+                    </button>
+                    {isSaved && (
+                      <button
+                        className="block w-full text-left px-4 py-2 hover:bg-red-500 text-white"
+                        onClick={e => { e.stopPropagation(); handleUnsave(); }}
+                        disabled={saveLoading}
+                      >
+                        Unsave
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

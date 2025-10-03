@@ -1,11 +1,35 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import SearchBar from "../../shared/SearchBar";
 import BlogCard from "../BlogListing/BlogCard";
-import { getHistory, searchHistory, clearHistory } from "../../api/curationApi";
+import { getHistory, clearHistory, deleteHistoryItems } from "../../api/curationApi";
 import { postsApi } from "../../api/postsApi";
 
 const HistoryPage = () => {
   const [historyItems, setHistoryItems] = useState([]);
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [showOptions, setShowOptions] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const kebabRef = useRef();
+  // Delete selected items (in selection mode)
+  const handleDeleteSelected = async () => {
+    if (selectedItems.length === 0) {
+      alert("No items selected.");
+      return;
+    }
+    if (!window.confirm("Delete selected history items?")) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await deleteHistoryItems(selectedItems);
+      setHistoryItems((prev) => prev.filter((item) => !selectedItems.includes(item.historyId || item._id)));
+      setSelectedItems([]);
+      setSelectionMode(false);
+    } catch (err) {
+      setError(err.message || "Failed to delete selected items");
+    } finally {
+      setLoading(false);
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
@@ -126,20 +150,16 @@ const HistoryPage = () => {
   }, [page]);
 
   const handleSearch = async (searchTerm) => {
+    if (!searchTerm.trim()) {
+      fetchHistory();
+      return;
+    }
+    setLoading(true);
+    setError(null);
     try {
-      if (!searchTerm.trim()) {
-        return fetchHistory();
-      }
-      setLoading(true);
-      setError(null);
-      console.log("Component: Searching history for:", searchTerm);
-
-      const response = await searchHistory(searchTerm);
-      console.log("Component: Search response:", response);
-
-      // Handle different possible response structures (same as fetchHistory)
+      // Fetch all history
+      const response = await getHistory(page);
       let historyData = [];
-      
       if (response) {
         if (Array.isArray(response)) {
           historyData = response;
@@ -155,60 +175,57 @@ const HistoryPage = () => {
           historyData = Array.isArray(response.data) ? response.data : [];
         }
       }
-
-      // Fetch full post details for search results too
-      if (historyData.length > 0) {
-        const historyWithPosts = await Promise.all(
-          historyData.map(async (historyItem) => {
-            const postDetails = await fetchPostDetails(historyItem.postId);
-            
-            if (postDetails) {
-              return {
-                ...postDetails,
-                _id: historyItem._id,
-                viewedAt: historyItem.viewedAt,
-                historyId: historyItem._id,
-                image: postDetails.thumbnail || postDetails.image,
-                title: postDetails.post_title || postDetails.title,
-                description: postDetails.small_description || postDetails.description,
-                postId: historyItem.postId,
-                community: postDetails.community || postDetails.community_name || "Unknown",
-                readTime: postDetails.readTime || "5 min read",
-                tags: Array.isArray(postDetails.tags) ? postDetails.tags : [],
-                author: postDetails.author || { name: "Unknown", avatar: "" },
-                upvotes: postDetails.upvotes || 0,
-                downvotes: postDetails.downvotes || 0,
-                comments: postDetails.comments || 0,
-                views: postDetails.views || 0
-              };
-            } else {
-              return {
-                _id: historyItem._id,
-                postId: historyItem.postId,
-                viewedAt: historyItem.viewedAt,
-                title: "Post no longer available",
-                description: "This post may have been deleted or is no longer accessible",
-                community: "Unknown",
-                readTime: "0 min read",
-                tags: [],
-                author: { name: "Unknown", avatar: "" },
-                upvotes: 0,
-                downvotes: 0,
-                comments: 0,
-                views: 0,
-                image: null
-              };
-            }
-          })
-        );
-        setHistoryItems(historyWithPosts);
-      } else {
-        setHistoryItems([]);
-      }
+      // Fetch post details for all history
+      const historyWithPosts = await Promise.all(
+        historyData.map(async (historyItem) => {
+          const postDetails = await fetchPostDetails(historyItem.postId);
+          if (postDetails) {
+            return {
+              ...postDetails,
+              _id: historyItem._id,
+              viewedAt: historyItem.viewedAt,
+              historyId: historyItem._id,
+              image: postDetails.thumbnail || postDetails.image,
+              title: postDetails.post_title || postDetails.title,
+              description: postDetails.small_description || postDetails.description,
+              postId: historyItem.postId,
+              community: postDetails.community || postDetails.community_name || "Unknown",
+              readTime: postDetails.readTime || "5 min read",
+              tags: Array.isArray(postDetails.tags) ? postDetails.tags : [],
+              author: postDetails.author || { name: "Unknown", avatar: "" },
+              upvotes: postDetails.upvotes || 0,
+              downvotes: postDetails.downvotes || 0,
+              comments: postDetails.comments || 0,
+              views: postDetails.views || 0
+            };
+          } else {
+            return {
+              _id: historyItem._id,
+              postId: historyItem.postId,
+              viewedAt: historyItem.viewedAt,
+              title: "Post no longer available",
+              description: "This post may have been deleted or is no longer accessible",
+              community: "Unknown",
+              readTime: "0 min read",
+              tags: [],
+              author: { name: "Unknown", avatar: "" },
+              upvotes: 0,
+              downvotes: 0,
+              comments: 0,
+              views: 0,
+              image: null
+            };
+          }
+        })
+      );
+      // Filter by search term (title or description)
+      const filtered = historyWithPosts.filter(item =>
+        (item.title && item.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+      setHistoryItems(filtered);
     } catch (err) {
-      console.error("Component: Error searching history:", err);
-      const errorMessage = err.message || err.error || 'Failed to search history';
-      setError(errorMessage);
+      setError(err.message || 'Failed to search history');
       setHistoryItems([]);
     } finally {
       setLoading(false);
@@ -283,12 +300,31 @@ const HistoryPage = () => {
             <div className="flex items-center gap-4 w-full md:w-[500px]">
               <SearchBar onSearch={handleSearch} />
               {historyItems.length > 0 && (
-                <button
-                  onClick={handleClearHistory}
-                  className="px-4 py-2 text-columbia-blue hover:text-white transition-colors"
-                >
-                  Clear History
-                </button>
+                <div className="relative" ref={kebabRef}>
+                  <button
+                    onClick={() => setShowOptions((v) => !v)}
+                    className="p-2 rounded-full hover:bg-periwinkle-light focus:outline-none"
+                    aria-label="Options"
+                  >
+                    <span className="material-icons">more_vert</span>
+                  </button>
+                  {showOptions && (
+                    <div className="absolute right-0 mt-2 w-44 bg-rich-black border border-navbar-border rounded-lg shadow-lg z-50">
+                      <button
+                        className="block w-full text-left px-4 py-2 hover:bg-periwinkle-light text-white"
+                        onClick={() => { setShowOptions(false); handleClearHistory(); }}
+                      >
+                        Clear History
+                      </button>
+                      <button
+                        className="block w-full text-left px-4 py-2 hover:bg-red-500 text-white"
+                        onClick={() => { setShowOptions(false); setSelectionMode(true); setSelectedItems([]); }}
+                      >
+                        Delete Selected
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -305,34 +341,71 @@ const HistoryPage = () => {
         ) : (
           <div className="space-y-6">
             {historyItems.length > 0 ? (
-              historyItems.map((item) => (
-                <BlogCard
-                  key={item._id || item.postId}
-                  image={item.image}
-                  community={item.community}
-                  date={new Date(item.viewedAt || item.createdAt).toLocaleDateString()}
-                  readTime={item.readTime}
-                  title={item.title}
-                  description={item.description}
-                  tags={item.tags}
-                  author={item.author}
-                  upvotes={item.upvotes}
-                  downvotes={item.downvotes}
-                  comments={item.comments}
-                  views={item.views}
-                  postId={item.postId || item._id}
-                />
-              ))
+              <>
+                {selectionMode && (
+                  <div className="flex items-center mb-4 gap-2">
+                    <button
+                      onClick={() => setSelectionMode(false)}
+                      className="px-3 py-1 text-sm bg-gray-700 rounded hover:bg-gray-600"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteSelected}
+                      className="px-3 py-1 text-sm bg-red-600 rounded text-white hover:bg-red-700"
+                      disabled={selectedItems.length === 0}
+                    >
+                      Delete Selected ({selectedItems.length})
+                    </button>
+                  </div>
+                )}
+                {historyItems.map((item) => {
+                  const itemId = item.historyId || item._id;
+                  return (
+                    <div key={itemId} className="flex items-center">
+                      {selectionMode && (
+                        <input
+                          type="checkbox"
+                          checked={selectedItems.includes(itemId)}
+                          onChange={() => setSelectedItems((prev) =>
+                            prev.includes(itemId)
+                              ? prev.filter((id) => id !== itemId)
+                              : [...prev, itemId]
+                          )}
+                          className="mr-4"
+                        />
+                      )}
+                      <div className="flex-1">
+                        <BlogCard
+                          id={item.postId || item._id}
+                          image={item.image}
+                          community={item.community}
+                          date={new Date(item.viewedAt || item.createdAt).toLocaleDateString()}
+                          readTime={item.readTime}
+                          title={item.title}
+                          description={item.description}
+                          tags={item.tags}
+                          author={item.author}
+                          upvotes={item.upvotes}
+                          downvotes={item.downvotes}
+                          comments={item.comments}
+                          views={item.views}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
             ) : (
               <div className="text-center py-16">
                 <span className="material-icons text-6xl text-columbia-blue mb-4 block">
-                  history
+                  search_off
                 </span>
                 <h3 className="font-fenix text-2xl text-white mb-2">
-                  No history yet
+                  No items found
                 </h3>
                 <p className="text-columbia-blue">
-                  Start reading posts to see your history here
+                  {error ? 'An error occurred while searching.' : 'No posts match your search.'}
                 </p>
                 {error && (
                   <p className="text-red-500 mt-2 text-sm">Debug: {error}</p>

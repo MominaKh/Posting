@@ -226,12 +226,25 @@ const CommunityFormCard = () => {
       return;
     }
 
+    // Check for user_id before proceeding
+    if (!auth?.user?._id) {
+      setError('User authentication error: Unable to find your user ID. Please log in again.');
+      // Optionally log for debugging
+      console.error('auth.user is missing or _id is undefined:', auth.user);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      // Pass auth.user._id to createCommunity instead of letting API decode JWT
-      const response = await communityApi.createCommunity(formData, imageFile, auth.user._id);
+      // Pass user_id in the formData object
+      const dataToSend = {
+        ...formData,
+        user_id: auth.user._id
+      };
+      console.log('Creating community with dataToSend:', dataToSend);
+      const response = await communityApi.createCommunity(dataToSend, imageFile, auth.user._id);
       
       setSuccess(true);
       

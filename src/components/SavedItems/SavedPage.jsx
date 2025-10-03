@@ -2,14 +2,17 @@ import React, { useState, useEffect } from "react";
 import SavedFilterBar from "./SavedFilterBar";
 import SearchBar from "../../shared/SearchBar";
 import BlogCard from "../BlogListing/BlogCard";
-import { getSavedPosts, searchSavedPosts } from "../../api/curationApi";
+import { getSavedPosts } from "../../api/curationApi";
 import LoadingState from "../../shared/LoadingState.jsx";
+
+const FILTERS = ["All Items", "Saved", "Watch Later"];
 
 const SavedPage = () => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  
+  const [selectedFilter, setSelectedFilter] = useState(FILTERS[0]);
+
   const formatPostData = (post) => ({
     ...post,
     id: post.postId || post._id,
@@ -29,11 +32,14 @@ const SavedPage = () => {
     user_id: post.user_id
   });
 
-  const fetchSavedPosts = async () => {
+
+  // Ref to trigger reload from BlogCard
+  const [reloadFlag, setReloadFlag] = useState(0);
+
+  const fetchSavedPosts = async (category = null) => {
     try {
       setLoading(true);
-      const response = await getSavedPosts();
-      // Handle different response structures
+      const response = await getSavedPosts(category === "All Items" ? undefined : category);
       const postsData = response.data || response || [];
       const formattedPosts = Array.isArray(postsData) ? postsData.map(formatPostData) : [];
       setPosts(formattedPosts);
@@ -45,24 +51,31 @@ const SavedPage = () => {
     }
   };
 
+
   useEffect(() => {
-    fetchSavedPosts();
-  }, []);
+    fetchSavedPosts(selectedFilter);
+  }, [selectedFilter, reloadFlag]);
+
 
   const handleSearch = async (query) => {
     setSearchQuery(query);
     if (!query.trim()) {
-      fetchSavedPosts();
+      fetchSavedPosts(selectedFilter);
       return;
     }
 
     try {
       setLoading(true);
-      const response = await searchSavedPosts(query);
-      // Handle different response structures
+      // Fetch all posts for the selected filter
+      const response = await getSavedPosts(selectedFilter === "All Items" ? undefined : selectedFilter);
       const postsData = response.data || response || [];
       const formattedPosts = Array.isArray(postsData) ? postsData.map(formatPostData) : [];
-      setPosts(formattedPosts);
+      // Filter by search term (title or description)
+      const filtered = formattedPosts.filter(post =>
+        (post.title && post.title.toLowerCase().includes(query.toLowerCase())) ||
+        (post.description && post.description.toLowerCase().includes(query.toLowerCase()))
+      );
+      setPosts(filtered);
     } catch (error) {
       console.error('Error searching saved posts:', error);
       setPosts([]);
@@ -74,6 +87,14 @@ const SavedPage = () => {
   if (loading) {
     return <LoadingState message="Loading saved posts..." />;
   }
+
+
+  // Handler to trigger reload from BlogCard
+  const handleReload = (removedId) => {
+    // Optimistically remove the post from UI
+    setPosts((prev) => prev.filter((p) => p.id !== removedId));
+    // Do not trigger reload, just update UI immediately
+  };
 
   return (
     <div className="min-h-screen bg-rich-black text-white relative">
@@ -93,7 +114,6 @@ const SavedPage = () => {
           pointerEvents: "none",
         }}
       />
-      
       <div className="container mx-auto px-5 sm:px-7 lg:px-10 py-8 relative z-10">
         <div className="mb-8">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-6">
@@ -113,43 +133,50 @@ const SavedPage = () => {
               />
             </div>
           </div>
+          {/* Filter Bar */}
+          <div className="mt-4">
+            <SavedFilterBar 
+              filters={FILTERS}
+              selected={selectedFilter}
+              onSelect={setSelectedFilter}
+            />
+          </div>
         </div>
 
         <div className="space-y-6">
           {posts.length === 0 ? (
             <div className="text-center py-16">
               <span className="material-icons text-6xl text-columbia-blue mb-4 block">
-                bookmark_border
+                {searchQuery ? "search_off" : "bookmark_border"}
               </span>
               <h3 className="font-fenix text-2xl text-white mb-2">
-                {searchQuery ? "No posts match your search" : "No saved items yet"}
+                {searchQuery ? "No items found" : "No saved items yet"}
               </h3>
               <p className="text-columbia-blue">
-                {searchQuery ? "Try different search terms" : "Start bookmarking posts to see them here"}
+                {searchQuery ? "Try a different search or filter." : "Start bookmarking posts to see them here"}
               </p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {posts.map((post) => (
-                <BlogCard
-                  key={post.id}
-                  id={post.postId || post._id} // Use postId from saved post data, fallback to _id
-                  image={post.image}
-                  community={post.community}
-                  date={post.date}
-                  readTime={post.readTime}
-                  title={post.title}
-                  description={post.description}
-                  tags={post.tags}
-                  author={post.author}
-                  upvotes={post.upvotes}
-                  downvotes={post.downvotes}
-                  comments={post.comments}
-                  views={post.views}
-                  user_id={post.user_id}
-                />
-              ))}
-            </div>
+            posts.map((post) => (
+              <BlogCard
+                key={post.postId && post._id ? `${post.postId}_${post._id}` : post.id}
+                id={post.postId || post._id}
+                image={post.image}
+                community={post.community}
+                date={post.date}
+                readTime={post.readTime}
+                title={post.title}
+                description={post.description}
+                tags={post.tags}
+                author={post.author}
+                upvotes={post.upvotes}
+                downvotes={post.downvotes}
+                comments={post.comments}
+                views={post.views}
+                user_id={post.user_id}
+                onSavedChange={() => handleReload(post.id)}
+              />
+            ))
           )}
         </div>
       </div>

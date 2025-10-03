@@ -49,6 +49,17 @@ export const checkSavedStatus = async (postId) => {
   }
 };
 
+// Unsave Post API
+export const unsavePost = async (postId) => {
+  try {
+    // Send category: null to unsave
+    const response = await api.post('/saved/save', { postId, category: null, userId: DEFAULT_USER_ID });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error.message;
+  }
+};
+
 // History API
 export const recordView = async (postId) => {
   try {
@@ -91,13 +102,25 @@ export const searchHistory = async (searchTerm) => {
 export const clearHistory = async () => {
   try {
     console.log('API: Calling clearHistory with userId:', DEFAULT_USER_ID);
-    const response = await api.delete('/history', { 
-      data: { userId: DEFAULT_USER_ID } 
+    const response = await api.delete('/history/clear', {
+      data: { userId: DEFAULT_USER_ID }
     });
     console.log('API: clearHistory raw response:', response);
     return response.data;
   } catch (error) {
     console.error('API: clearHistory error:', error);
+    throw error.response?.data || { message: error.message };
+  }
+};
+
+// Delete selected history items
+export const deleteHistoryItems = async (itemIds) => {
+  try {
+    const response = await api.delete('/history/items', {
+      data: { userId: DEFAULT_USER_ID, itemIds }
+    });
+    return response.data;
+  } catch (error) {
     throw error.response?.data || { message: error.message };
   }
 };

@@ -54,6 +54,7 @@ const buildCommunityFormData = (communityData, imageFile = null, includeUserId =
   
   if (includeUserId) {
     const userId = getUserIdFromToken();
+    console.log('Including userId in form data:', userId);
     formData.append('userId', userId);
   }
   
